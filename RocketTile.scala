@@ -1,16 +1,16 @@
 // See LICENSE.SiFive for license details.
 // See LICENSE.Berkeley for license details.
 
-package rocket
+package freechips.rocketchip.rocket
 
 import Chisel._
-import config._
-import coreplex._
-import diplomacy._
-import tile._
-import uncore.devices._
-import uncore.tilelink2._
-import util._
+
+import freechips.rocketchip.config._
+import freechips.rocketchip.coreplex._
+import freechips.rocketchip.diplomacy._
+import freechips.rocketchip.tile._
+import freechips.rocketchip.tilelink._
+import freechips.rocketchip.util._
 
 case class RocketTileParams(
     core: RocketCoreParams = RocketCoreParams(),
@@ -24,6 +24,7 @@ case class RocketTileParams(
 }
   
 class RocketTile(val rocketParams: RocketTileParams, val hartid: Int)(implicit p: Parameters) extends BaseTile(rocketParams)(p)
+    with HasExternalInterrupts
     with HasLazyRoCC  // implies CanHaveSharedFPU with CanHavePTW with HasHellaCache
     with CanHaveScratchpad { // implies CanHavePTW with HasHellaCache with HasICacheFrontend
 
@@ -124,9 +125,11 @@ class RocketTile(val rocketParams: RocketTileParams, val hartid: Int)(implicit p
 }
 
 class RocketTileBundle(outer: RocketTile) extends BaseTileBundle(outer)
+    with HasExternalInterruptsBundle
     with CanHaveScratchpadBundle
 
 class RocketTileModule(outer: RocketTile) extends BaseTileModule(outer, () => new RocketTileBundle(outer))
+    with HasExternalInterruptsModule
     with HasLazyRoCCModule
     with CanHaveScratchpadModule {
 
@@ -257,7 +260,7 @@ class RationalRocketTile(rtp: RocketTileParams, hartid: Int)(implicit p: Paramet
   masterNode :=* source.node
 
   val slaveNode = new TLRationalInputNode() { override def reverse = true }
-  val sink = LazyModule(new TLRationalCrossingSink(util.SlowToFast))
+  val sink = LazyModule(new TLRationalCrossingSink(SlowToFast))
   rocket.slaveNode :*= sink.node
   sink.node :*= slaveNode
 

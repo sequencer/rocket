@@ -1,17 +1,16 @@
 // See LICENSE.Berkeley for license details.
 // See LICENSE.SiFive for license details.
 
-package rocket
+package freechips.rocketchip.rocket
 
 import Chisel._
-import chisel3.core.withReset
-import config._
-import tile._
-import uncore.constants._
-import diplomacy._
-import util._
 import Chisel.ImplicitConversions._
-import collection.immutable.ListMap
+import chisel3.core.withReset
+import freechips.rocketchip.config.Parameters
+import freechips.rocketchip.tile._
+import freechips.rocketchip.util._
+import scala.collection.immutable.ListMap
+import scala.collection.mutable.ArrayBuffer
 
 case class RocketCoreParams(
   bootFreqHz: BigInt = 0,
@@ -401,7 +400,7 @@ class Rocket(implicit p: Parameters) extends CoreModule()(p)
     mem_reg_wdata := alu.io.out
     when (ex_ctrl.rxs2 && (ex_ctrl.mem || ex_ctrl.rocc || ex_sfence)) {
       val typ = Mux(ex_ctrl.rocc, log2Ceil(xLen/8).U, ex_ctrl.mem_type)
-      mem_reg_rs2 := new uncore.util.StoreGen(typ, 0.U, ex_rs(1), coreDataBytes).data
+      mem_reg_rs2 := new StoreGen(typ, 0.U, ex_rs(1), coreDataBytes).data
     }
   }
 
@@ -724,7 +723,7 @@ class Rocket(implicit p: Parameters) extends CoreModule()(p)
 class RegFile(n: Int, w: Int, zero: Boolean = false) {
   private val rf = Mem(n, UInt(width = w))
   private def access(addr: UInt) = rf(~addr(log2Up(n)-1,0))
-  private val reads = collection.mutable.ArrayBuffer[(UInt,UInt)]()
+  private val reads = ArrayBuffer[(UInt,UInt)]()
   private var canRead = true
   def read(addr: UInt) = {
     require(canRead)
