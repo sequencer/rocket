@@ -3,103 +3,104 @@
 package org.chipsalliance.rocket
 
 import chisel3._
-import chisel3.util.{Cat}
-import Chisel.ImplicitConversions._
-import freechips.rocketchip.config.Parameters
-import freechips.rocketchip.tile.{CoreBundle, HasCoreParameters}
-import freechips.rocketchip.util._
+import chisel3.util.Cat
 
-class BPControl(implicit p: Parameters) extends CoreBundle()(p) {
-  val ttype = UInt(4.W)
-  val dmode = Bool()
-  val maskmax = UInt(6.W)
-  val reserved = UInt((xLen - (if (coreParams.useBPWatch) 26 else 24)).W)
-  val action = UInt((if (coreParams.useBPWatch) 3 else 1).W)
-  val chain = Bool()
-  val zero = UInt(2.W)
-  val tmatch = UInt(2.W)
-  val m = Bool()
-  val h = Bool()
-  val s = Bool()
-  val u = Bool()
-  val x = Bool()
-  val w = Bool()
-  val r = Bool()
+class BPControl(useBPWatch: Boolean, xLen: Int) extends Bundle {
+  val ttype: UInt = UInt(4.W)
+  val dmode: Bool = Bool()
+  val maskmax: UInt = UInt(6.W)
+  val reserved: UInt = UInt((xLen - (if (useBPWatch) 26 else 24)).W)
+  val action: UInt = UInt((if (useBPWatch) 3 else 1).W)
+  val chain: Bool = Bool()
+  val zero: UInt = UInt(2.W)
+  val tmatch: UInt = UInt(2.W)
+  val m: Bool = Bool()
+  val h: Bool = Bool()
+  val s: Bool = Bool()
+  val u: Bool = Bool()
+  val x: Bool = Bool()
+  val w: Bool = Bool()
+  val r: Bool = Bool()
 
-  def tType = 2
-  def maskMax = 4
-  def enabled(mstatus: MStatus) = !mstatus.debug && Cat(m, h, s, u)(mstatus.prv)
+  def tType: Int = 2
+
+  def maskMax: Int = 4
+
+  def enabled(mstatus: MStatus): Bool = !mstatus.debug && Cat(m, h, s, u)(mstatus.prv)
 }
 
-class TExtra(implicit p: Parameters) extends CoreBundle()(p) {
-  def mvalueBits: Int = if (xLen == 32) coreParams.mcontextWidth min  6 else coreParams.mcontextWidth min 13
-  def svalueBits: Int = if (xLen == 32) coreParams.scontextWidth min 16 else coreParams.scontextWidth min 34
+class TExtra(xLen: Int, mcontextWidth: Int, scontextWidth: Int) extends Bundle {
+  def mvalueBits: Int = if (xLen == 32) mcontextWidth min 6 else mcontextWidth min 13
+
+  def svalueBits: Int = if (xLen == 32) scontextWidth min 16 else scontextWidth min 34
+
   def mselectPos: Int = if (xLen == 32) 25 else 50
-  def mvaluePos : Int = mselectPos + 1
-  def sselectPos: Int = 0
-  def svaluePos : Int = 2
 
-  val mvalue  = UInt(mvalueBits.W)
-  val mselect = Bool()
-  val pad2    = UInt((mselectPos - svalueBits - 2).W)
-  val svalue  = UInt(svalueBits.W)
-  val pad1    = UInt(1.W)
-  val sselect = Bool()
+  def mvaluePos: Int = mselectPos + 1
+
+  def sselectPos: Int = 0
+
+  def svaluePos: Int = 2
+
+  val mvalue: UInt = UInt(mvalueBits.W)
+  val mselect: Bool = Bool()
+  val pad2: UInt = UInt((mselectPos - svalueBits - 2).W)
+  val svalue: UInt = UInt(svalueBits.W)
+  val pad1: UInt = UInt(1.W)
+  val sselect: Bool = Bool()
 }
 
-class BP(implicit p: Parameters) extends CoreBundle()(p) {
-  val control = new BPControl
-  val address = UInt(vaddrBits.W)
-  val textra  = new TExtra
+class BP(useBPWatch: Boolean, xLen: Int, mcontextWidth: Int, scontextWidth: Int, vaddrBits: Int) extends Bundle {
+  val control: BPControl = new BPControl(useBPWatch, xLen)
+  val address: UInt = UInt(vaddrBits.W)
+  val textra: TExtra = new TExtra(xLen, mcontextWidth, scontextWidth)
 
   def contextMatch(mcontext: UInt, scontext: UInt) =
-    (if (coreParams.mcontextWidth > 0) (!textra.mselect || (mcontext(textra.mvalueBits-1,0) === textra.mvalue)) else true.B) &&
-    (if (coreParams.scontextWidth > 0) (!textra.sselect || (scontext(textra.svalueBits-1,0) === textra.svalue)) else true.B)
+    (if (mcontextWidth > 0) (!textra.mselect || (mcontext(textra.mvalueBits - 1, 0) === textra.mvalue)) else true.B) &&
+      (if (scontextWidth > 0) (!textra.sselect || (scontext(textra.svalueBits - 1, 0) === textra.svalue)) else true.B)
 
-  def mask(dummy: Int = 0) =
-    (0 until control.maskMax-1).scanLeft(control.tmatch(0))((m, i) => m && address(i)).asUInt
+  def mask: UInt = VecInit((0 until control.maskMax - 1).scanLeft(control.tmatch(0))((m, i) => m && address(i))).asUInt
 
-  def pow2AddressMatch(x: UInt) =
-    (~x | mask()) === (~address | mask())
+  def pow2AddressMatch(x: UInt): Bool = (~x | mask) === (~address | mask)
 
-  def rangeAddressMatch(x: UInt) =
-    (x >= address) ^ control.tmatch(0)
+  def rangeAddressMatch(x: UInt): Bool = (x >= address) ^ control.tmatch(0)
 
-  def addressMatch(x: UInt) =
-    Mux(control.tmatch(1), rangeAddressMatch(x), pow2AddressMatch(x))
+  def addressMatch(x: UInt): Bool = Mux(control.tmatch(1), rangeAddressMatch(x), pow2AddressMatch(x))
 }
 
-class BPWatch (val n: Int) extends Bundle() {
-  val valid = Vec(n, Bool())
-  val rvalid = Vec(n, Bool())
-  val wvalid = Vec(n, Bool())
-  val ivalid = Vec(n, Bool())
-  val action = UInt(3.W)
+class BPWatch(val n: Int) extends Bundle {
+  val valid: Vec[Bool] = Vec(n, Bool())
+  val rvalid: Vec[Bool] = Vec(n, Bool())
+  val wvalid: Vec[Bool] = Vec(n, Bool())
+  val ivalid: Vec[Bool] = Vec(n, Bool())
+  val action: UInt = UInt(3.W)
 }
 
-class BreakpointUnit(n: Int)(implicit val p: Parameters) extends Module with HasCoreParameters {
-  val io = IO(new Bundle {
-    val status = Input(new MStatus())
-    val bp = Input(Vec(n, new BP))
-    val pc = Input(UInt(vaddrBits.W))
-    val ea = Input(UInt(vaddrBits.W))
-    val mcontext = Input(UInt(coreParams.mcontextWidth.W))
-    val scontext = Input(UInt(coreParams.scontextWidth.W))
-    val xcpt_if  = Output(Bool())
-    val xcpt_ld  = Output(Bool())
-    val xcpt_st  = Output(Bool())
-    val debug_if = Output(Bool())
-    val debug_ld = Output(Bool())
-    val debug_st = Output(Bool())
-    val bpwatch  = Output(Vec(n, new BPWatch(1)))
-  })
+class BreakpointUnitIO(n: Int, useBPWatch: Boolean, xLen: Int, mcontextWidth: Int, scontextWidth: Int, vaddrBits: Int) extends Bundle {
+  val status: MStatus = Input(new MStatus)
+  val bp: Vec[BP] = Input(Vec(n, new BP(useBPWatch, xLen, mcontextWidth, scontextWidth, vaddrBits)))
+  val pc: UInt = Input(UInt(vaddrBits.W))
+  val ea: UInt = Input(UInt(vaddrBits.W))
+  val mcontext: UInt = Input(UInt(mcontextWidth.W))
+  val scontext: UInt = Input(UInt(scontextWidth.W))
+  val xcpt_if: Bool = Output(Bool())
+  val xcpt_ld: Bool = Output(Bool())
+  val xcpt_st: Bool = Output(Bool())
+  val debug_if: Bool = Output(Bool())
+  val debug_ld: Bool = Output(Bool())
+  val debug_st: Bool = Output(Bool())
+  val bpwatch: Vec[BPWatch] = Output(Vec(n, new BPWatch(1)))
+}
 
-  io.xcpt_if := false
-  io.xcpt_ld := false
-  io.xcpt_st := false
-  io.debug_if := false
-  io.debug_ld := false
-  io.debug_st := false
+class BreakpointUnit(n: Int, useBPWatch: Boolean, xLen: Int, mcontextWidth: Int, scontextWidth: Int, vaddrBits: Int) extends Module {
+  val io = IO(new BreakpointUnitIO(n, useBPWatch, xLen, mcontextWidth, scontextWidth, vaddrBits))
+
+  io.xcpt_if := false.B
+  io.xcpt_ld := false.B
+  io.xcpt_st := false.B
+  io.debug_if := false.B
+  io.debug_ld := false.B
+  io.debug_st := false.B
 
   (io.bpwatch zip io.bp).foldLeft((true.B, true.B, true.B)) { case ((ri, wi, xi), (bpw, bp)) =>
     val en = bp.control.enabled(io.status)
@@ -116,9 +117,24 @@ class BreakpointUnit(n: Int)(implicit val p: Parameters) extends Module with Has
     bpw.wvalid(0) := false.B
     bpw.ivalid(0) := false.B
 
-    when (end && r && ri) { io.xcpt_ld := (action === 0.U); io.debug_ld := (action === 1.U); bpw.valid(0) := true.B; bpw.rvalid(0) := true.B }
-    when (end && w && wi) { io.xcpt_st := (action === 0.U); io.debug_st := (action === 1.U); bpw.valid(0) := true.B; bpw.wvalid(0) := true.B }
-    when (end && x && xi) { io.xcpt_if := (action === 0.U); io.debug_if := (action === 1.U); bpw.valid(0) := true.B; bpw.ivalid(0) := true.B }
+    when(end && r && ri) {
+      io.xcpt_ld := (action === 0.U)
+      io.debug_ld := (action === 1.U)
+      bpw.valid(0) := true.B
+      bpw.rvalid(0) := true.B
+    }
+    when(end && w && wi) {
+      io.xcpt_st := (action === 0.U)
+      io.debug_st := (action === 1.U)
+      bpw.valid(0) := true.B
+      bpw.wvalid(0) := true.B
+    }
+    when(end && x && xi) {
+      io.xcpt_if := (action === 0.U)
+      io.debug_if := (action === 1.U)
+      bpw.valid(0) := true.B
+      bpw.ivalid(0) := true.B
+    }
 
     (end || r, end || w, end || x)
   }
