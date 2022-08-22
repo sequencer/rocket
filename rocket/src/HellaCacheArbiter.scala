@@ -1,7 +1,7 @@
 // See LICENSE.Berkeley for license details.
 // See LICENSE.SiFive for license details.
 
-package freechips.rocketchip.rocket
+package org.chipsalliance.rocket
 
 import Chisel._
 import freechips.rocketchip.config.Parameters
