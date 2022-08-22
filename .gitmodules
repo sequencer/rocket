@@ -1,0 +1,18 @@
+[submodule "dependencies/chisel3.git"]
+	path = dependencies/chisel3
+	url = git@github.com:chipsalliance/chisel3
+[submodule "dependencies/chiseltest.git"]
+	path = dependencies/chiseltest
+	url = git@github.com:ucb-bar/chiseltest
+[submodule "dependencies/firrtl.git"]
+	path = dependencies/firrtl
+	url = git@github.com:chipsalliance/firrtl
+[submodule "dependencies/treadle.git"]
+	path = dependencies/treadle
+	url = git@github.com:chipsalliance/treadle
+[submodule "dependencies/cde.git"]
+	path = dependencies/cde
+	url = git@github.com:chipsalliance/cde
+[submodule "dependencies/diplomacy.git"]
+	path = dependencies/diplomacy
+	url = git@github.com:chipsalliance/diplomacy
