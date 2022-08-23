@@ -3,14 +3,15 @@
 
 package org.chipsalliance.rocket
 
-import Chisel._
-import freechips.rocketchip.util._
-import freechips.rocketchip.util.property
+import chisel3._
+import chisel3.util.log2Ceil
+
+import scala.language.postfixOps
 
 class EventSet(val gate: (UInt, UInt) => Bool, val events: Seq[(String, () => Bool)]) {
-  def size = events.size
-  val hits = Wire(Vec(size, Bool()))
-  def check(mask: UInt) = {
+  def size: Int = events.size
+  val hits: Vec[Bool] = Wire(Vec(size, Bool()))
+  def check(mask: UInt): Bool = {
     hits := events.map(_._2())
     gate(mask, hits.asUInt)
   }
@@ -20,7 +21,7 @@ class EventSet(val gate: (UInt, UInt) => Bool, val events: Seq[(String, () => Bo
   }
   def withCovers: Unit = {
     events.zipWithIndex.foreach {
-      case ((name, func), i) => property.cover(gate((1.U << i), (func() << i)), name)
+      case ((name, func), i) => cover(gate(1.U << i, func() << i), name)
     }
   }
 }
@@ -40,48 +41,18 @@ class EventSets(val eventSets: Seq[EventSet]) {
   }
 
   def evaluate(eventSel: UInt): Bool = {
-    val (set, mask) = decode(eventSel)
-    val sets = for (e <- eventSets) yield {
+    val (set: UInt, mask: UInt) = decode(eventSel)
+    val sets: Vec[Bool] = VecInit(for (e <- eventSets) yield {
       require(e.hits.getWidth <= mask.getWidth, s"too many events ${e.hits.getWidth} wider than mask ${mask.getWidth}")
       e check mask
-    }
+    })
     sets(set)
   }
 
-  def cover() = eventSets.foreach { _ withCovers }
+  def cover(): Unit = eventSets.foreach { _ withCovers }
 
-  private def eventSetIdBits = log2Ceil(eventSets.size)
-  private def maxEventSetIdBits = 8
+  private def eventSetIdBits: Int = log2Ceil(eventSets.size)
+  private def maxEventSetIdBits: Int = 8
 
-  require(eventSetIdBits <= maxEventSetIdBits)
-}
-
-class SuperscalarEventSets(val eventSets: Seq[(Seq[EventSet], (UInt, UInt) => UInt)]) {
-  def evaluate(eventSel: UInt): UInt = {
-    val (set, mask) = decode(eventSel)
-    val sets = for ((sets, reducer) <- eventSets) yield {
-      sets.map { set =>
-        require(set.hits.getWidth <= mask.getWidth, s"too many events ${set.hits.getWidth} wider than mask ${mask.getWidth}")
-        set.check(mask)
-      }.reduce(reducer)
-    }
-    val zeroPadded = sets.padTo(1 << eventSetIdBits, 0.U)
-    zeroPadded(set)
-  }
-
-  def toScalarEventSets: EventSets = new EventSets(eventSets.map(_._1.head))
-
-  def cover(): Unit = { eventSets.foreach(_._1.foreach(_.withCovers)) }
-
-  private def decode(counter: UInt): (UInt, UInt) = {
-    require(eventSets.size <= (1 << maxEventSetIdBits))
-    require(eventSetIdBits > 0)
-    (counter(eventSetIdBits-1, 0), counter >> maxEventSetIdBits)
-  }
-
-  private def eventSetIdBits = log2Ceil(eventSets.size)
-  private def maxEventSetIdBits = 8
-
-  require(eventSets.forall(s => s._1.forall(_.size == s._1.head.size)))
   require(eventSetIdBits <= maxEventSetIdBits)
 }
