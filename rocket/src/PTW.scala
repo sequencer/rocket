@@ -8,15 +8,9 @@ import Chisel.ImplicitConversions._
 import chisel3.withClock
 import chisel3.internal.sourceinfo.SourceInfo
 import chisel3.experimental.chiselName
-import freechips.rocketchip.config.Parameters
-import freechips.rocketchip.subsystem.CacheBlockBytes
-import freechips.rocketchip.tile._
-import freechips.rocketchip.tilelink._
-import freechips.rocketchip.util._
-import freechips.rocketchip.util.property
 import scala.collection.mutable.ListBuffer
 
-class PTWReq(implicit p: Parameters) extends CoreBundle()(p) {
+class PTWReq(vpnBits: Int) extends Bundle {
   val addr = UInt(width = vpnBits)
   val need_gpa = Bool()
   val vstage1 = Bool()
@@ -39,8 +33,7 @@ class PTWResp(implicit p: Parameters) extends CoreBundle()(p) {
   val gpa_is_pte = Bool()
 }
 
-class TLBPTWIO(implicit p: Parameters) extends CoreBundle()(p)
-    with HasCoreParameters {
+class TLBPTWIO extends Bundle {
   val req = Decoupled(Valid(new PTWReq))
   val resp = Valid(new PTWResp).flip
   val ptbr = new PTBR().asInput

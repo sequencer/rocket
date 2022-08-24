@@ -2,30 +2,30 @@
 
 package org.chipsalliance.rocket
 
-import Chisel._
-import Chisel.ImplicitConversions._
-import freechips.rocketchip.config.Parameters
-import freechips.rocketchip.tile._
-import freechips.rocketchip.util._
+import chisel3._
+import chisel3.util.{DecoupledIO, log2Ceil}
 
-class Instruction(implicit val p: Parameters) extends ParameterizedBundle with HasCoreParameters {
-  val xcpt0 = new FrontendExceptions // exceptions on first half of instruction
-  val xcpt1 = new FrontendExceptions // exceptions on second half of instruction
+class Instruction extends Bundle {
+  /** exceptions on first half of instruction. */
+  val xcpt0 = new FrontendExceptions
+  /** exceptions on second half of instruction. */
+  val xcpt1 = new FrontendExceptions
   val replay = Bool()
   val rvc = Bool()
   val inst = new ExpandedInstruction
-  val raw = UInt(width = 32)
-  require(coreInstBits == (if (usingCompressed) 16 else 32))
+  val raw = UInt(32.W)
 }
 
-class IBuf(implicit p: Parameters) extends CoreModule {
-  val io = new Bundle {
-    val imem = Decoupled(new FrontendResp).flip
-    val kill = Bool(INPUT)
-    val pc = UInt(OUTPUT, vaddrBitsExtended)
-    val btb_resp = new BTBResp().asOutput
-    val inst = Vec(retireWidth, Decoupled(new Instruction))
-  }
+class IBufIO extends Bundle {
+  val imem = Flipped(DecoupledIO(new FrontendResp))
+  val kill = Bool(INPUT)
+  val pc = UInt(OUTPUT, vaddrBitsExtended)
+  val btb_resp = new BTBResp().asOutput
+  val inst = Vec(retireWidth, Decoupled(new Instruction))
+}
+class IBuf extends Module {
+  val io = IO(new IBufIO)
+  require(coreInstBits == (if (usingCompressed) 16 else 32))
 
   // This module is meant to be more general, but it's not there yet
   require(decodeWidth == 1)

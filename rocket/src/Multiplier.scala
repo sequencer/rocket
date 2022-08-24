@@ -4,17 +4,15 @@
 package org.chipsalliance.rocket
 
 import chisel3._
-import chisel3.util.{Cat, log2Up, log2Ceil, log2Floor, Log2, Decoupled, Enum, Fill, Valid, Pipe}
-import Chisel.ImplicitConversions._
-import freechips.rocketchip.util._
-import ALU._
+import chisel3.util.{Cat, Decoupled, Enum, Fill, Log2, Pipe, Valid, log2Ceil, log2Floor, log2Up}
+import org.chipsalliance.rocket.Operands._
 
 class MultiplierReq(dataBits: Int, tagBits: Int) extends Bundle {
-  val fn = Bits(SZ_ALU_FN.W)
-  val dw = Bits(SZ_DW.W)
-  val in1 = Bits(dataBits.W)
-  val in2 = Bits(dataBits.W)
-  val tag = UInt(tagBits.W)
+  val fn: UInt = UInt(ALU.width.W)
+  val dw: UInt = UInt(DW.width.W)
+  val in1: UInt = UInt(dataBits.W)
+  val in2: UInt = UInt(dataBits.W)
+  val tag: UInt = UInt(tagBits.W)
 }
 
 class MultiplierResp(dataBits: Int, tagBits: Int) extends Bundle {
@@ -37,8 +35,8 @@ case class MulDivParams(
 )
 
 class MulDiv(cfg: MulDivParams, width: Int, nXpr: Int = 32) extends Module {
-  private def minDivLatency = (cfg.divUnroll > 0).option(if (cfg.divEarlyOut) 3 else 1 + w/cfg.divUnroll)
-  private def minMulLatency = (cfg.mulUnroll > 0).option(if (cfg.mulEarlyOut) 2 else w/cfg.mulUnroll)
+  private def minDivLatency: Option[Int] = if (cfg.divUnroll > 0) Some(if (cfg.divEarlyOut) 3 else 1 + w/cfg.divUnroll) else None
+  private def minMulLatency = if (cfg.mulUnroll > 0) Some(if (cfg.mulEarlyOut) 2 else w/cfg.mulUnroll) else None
   def minLatency: Int = (minDivLatency ++ minMulLatency).min
 
   val io = IO(new MultiplierIO(width, log2Up(nXpr)))
@@ -51,8 +49,8 @@ class MulDiv(cfg: MulDivParams, width: Int, nXpr: Int = 32) extends Module {
  
   val req = Reg(chiselTypeOf(io.req.bits))
   val count = Reg(UInt(log2Ceil(
-    ((cfg.divUnroll != 0).option(w/cfg.divUnroll + 1).toSeq ++
-     (cfg.mulUnroll != 0).option(mulw/cfg.mulUnroll)).reduce(_ max _)).W))
+    (if (cfg.divUnroll != 0) Some(w / cfg.divUnroll + 1).toSeq else None ++
+      (if (cfg.mulUnroll != 0) Some(mulw / cfg.mulUnroll) else None)).max).W))
   val neg_out = Reg(Bool())
   val isHi = Reg(Bool())
   val resHi = Reg(Bool())
@@ -60,21 +58,21 @@ class MulDiv(cfg: MulDivParams, width: Int, nXpr: Int = 32) extends Module {
   val remainder = Reg(Bits((2*mulw+2).W)) // div only needs 2*w+1 bits
 
   val mulDecode = List(
-    FN_MUL    -> List(Y, N, X, X),
-    FN_MULH   -> List(Y, Y, Y, Y),
-    FN_MULHU  -> List(Y, Y, N, N),
-    FN_MULHSU -> List(Y, Y, Y, N))
+    ALU.MUL    -> List(Y, N, X, X),
+    ALU.MULH   -> List(Y, Y, Y, Y),
+    ALU.MULHU  -> List(Y, Y, N, N),
+    ALU.MULHSU -> List(Y, Y, Y, N))
   val divDecode = List(
-    FN_DIV    -> List(N, N, Y, Y),
-    FN_REM    -> List(N, Y, Y, Y),
-    FN_DIVU   -> List(N, N, N, N),
-    FN_REMU   -> List(N, Y, N, N))
+    ALU.DIV    -> List(N, N, Y, Y),
+    ALU.REM    -> List(N, Y, Y, Y),
+    ALU.DIVU   -> List(N, N, N, N),
+    ALU.REMU   -> List(N, Y, N, N))
   val cmdMul :: cmdHi :: lhsSigned :: rhsSigned :: Nil =
     DecodeLogic(io.req.bits.fn, List(X, X, X, X),
       (if (cfg.divUnroll != 0) divDecode else Nil) ++ (if (cfg.mulUnroll != 0) mulDecode else Nil)).map(_.asBool)
 
   require(w == 32 || w == 64)
-  def halfWidth(req: MultiplierReq) = (w > 32).B && req.dw === DW_32
+  def halfWidth(req: MultiplierReq) = (w > 32).B && req.dw === DW.N
 
   def sext(x: Bits, halfW: Bool, signed: Bool) = {
     val sign = signed && Mux(halfW, x(w/2-1), x(w-1))
@@ -84,9 +82,9 @@ class MulDiv(cfg: MulDivParams, width: Int, nXpr: Int = 32) extends Module {
   val (lhs_in, lhs_sign) = sext(io.req.bits.in1, halfWidth(io.req.bits), lhsSigned)
   val (rhs_in, rhs_sign) = sext(io.req.bits.in2, halfWidth(io.req.bits), rhsSigned)
   
-  val subtractor = remainder(2*w,w) - divisor
-  val result = Mux(resHi, remainder(2*w, w+1), remainder(w-1, 0))
-  val negated_remainder = -result
+  val subtractor: UInt = remainder(2*w,w) - divisor
+  val result: UInt = Mux(resHi, remainder(2*w, w+1), remainder(w-1, 0))
+  val negated_remainder: UInt = -result
 
   if (cfg.divUnroll != 0) when (state === s_neg_inputs) {
     when (remainder(w-1)) {
@@ -100,7 +98,7 @@ class MulDiv(cfg: MulDivParams, width: Int, nXpr: Int = 32) extends Module {
   if (cfg.divUnroll != 0) when (state === s_neg_output) {
     remainder := negated_remainder
     state := s_done_div
-    resHi := false
+    resHi := false.B
   }
   if (cfg.mulUnroll != 0) when (state === s_mul) {
     val mulReg = Cat(remainder(2*mulw+1,w+1),remainder(w-1,0))
@@ -113,9 +111,9 @@ class MulDiv(cfg: MulDivParams, width: Int, nXpr: Int = 32) extends Module {
     val nextMplierSign = count === mulw/cfg.mulUnroll-2 && neg_out
 
     val eOutMask = ((BigInt(-1) << mulw).S >> (count * cfg.mulUnroll)(log2Up(mulw)-1,0))(mulw-1,0)
-    val eOut = (cfg.mulEarlyOut).B && count =/= mulw/cfg.mulUnroll-1 && count =/= 0 &&
+    val eOut = (cfg.mulEarlyOut).B && count =/= (mulw/cfg.mulUnroll-1 ).U && count =/= 0.U &&
       !isHi && (mplier & ~eOutMask) === 0.U
-    val eOutRes = (mulReg >> (mulw - count * cfg.mulUnroll)(log2Up(mulw)-1,0))
+    val eOutRes = (mulReg >> (mulw - count * cfg.mulUnroll).U(log2Up(mulw)-1, 0))
     val nextMulReg1 = Cat(nextMulReg(2*mulw,mulw), Mux(eOut, eOutRes, nextMulReg)(mulw-1,0))
     remainder := Cat(nextMulReg1 >> w, nextMplierSign, nextMulReg1(w-1,0))
 
@@ -142,14 +140,14 @@ class MulDiv(cfg: MulDivParams, width: Int, nXpr: Int = 32) extends Module {
     }
     count := count + 1
 
-    val divby0 = count === 0 && !subtractor(w)
+    val divby0: Bool = count === 0 && !subtractor(w)
     if (cfg.divEarlyOut) {
       val align = 1 << log2Floor(cfg.divUnroll max cfg.divEarlyOutGranularity)
-      val alignMask = ~((align-1).U(log2Ceil(w).W))
-      val divisorMSB = Log2(divisor(w-1,0), w) & alignMask
-      val dividendMSB = Log2(remainder(w-1,0), w) | ~alignMask
-      val eOutPos = ~(dividendMSB - divisorMSB)
-      val eOut = count === 0 && !divby0 && eOutPos >= align
+      val alignMask: UInt = ~((align-1).U(log2Ceil(w).W))
+      val divisorMSB: UInt = Log2(divisor(w - 1, 0), w) & alignMask
+      val dividendMSB: UInt = Log2(remainder(w - 1, 0), w) | ~alignMask
+      val eOutPos: UInt = ~(dividendMSB - divisorMSB)
+      val eOut = count === 0 && !divby0 && eOutPos >= align.U
       when (eOut) {
         remainder := remainder(w-1,0) << eOutPos
         count := eOutPos >> log2Floor(cfg.divUnroll)

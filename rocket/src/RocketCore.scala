@@ -7,12 +7,8 @@ import Chisel._
 import Chisel.ImplicitConversions._
 import chisel3.withClock
 import chisel3.experimental.{chiselName, NoChiselNamePrefix}
-import freechips.rocketchip.config.Parameters
-import freechips.rocketchip.tile._
-import freechips.rocketchip.util._
-import freechips.rocketchip.util.property
-import freechips.rocketchip.scie._
 import scala.collection.mutable.ArrayBuffer
+import org.chipsalliance.rocket.Operands._
 
 case class RocketCoreParams(
   bootFreqHz: BigInt = 0,
@@ -288,7 +284,7 @@ class Rocket(tile: RocketTile)(implicit p: Parameters) extends CoreModule()(p)
   val rf = new RegFile(regAddrMask, xLen)
   val id_rs = id_raddr.map(rf.read _)
   val ctrl_killd = Wire(Bool())
-  val id_npc = (ibuf.io.pc.asSInt + ImmGen(IMM_UJ, id_inst(0))).asUInt
+  val id_npc = (ibuf.io.pc.asSInt + ImmGen(IMM.UJ, id_inst(0))).asUInt
 
   val csr = Module(new CSRFile(perfEvents, coreParams.customCSRs.decls))
   val id_csr_en = id_ctrl.csr.isOneOf(CSR.S, CSR.C, CSR.W)
@@ -527,8 +523,8 @@ class Rocket(tile: RocketTile)(implicit p: Parameters) extends CoreModule()(p)
   // memory stage
   val mem_pc_valid = mem_reg_valid || mem_reg_replay || mem_reg_xcpt_interrupt
   val mem_br_target = mem_reg_pc.asSInt +
-    Mux(mem_ctrl.branch && mem_br_taken, ImmGen(IMM_SB, mem_reg_inst),
-    Mux(mem_ctrl.jal, ImmGen(IMM_UJ, mem_reg_inst),
+    Mux(mem_ctrl.branch && mem_br_taken, ImmGen(IMM.SB, mem_reg_inst),
+    Mux(mem_ctrl.jal, ImmGen(IMM.UJ, mem_reg_inst),
     Mux(mem_reg_rvc, SInt(2), SInt(4))))
   val mem_npc = (Mux(mem_ctrl.jalr || mem_reg_sfence, encodeVirtualAddress(mem_reg_wdata, mem_reg_wdata).asSInt, mem_br_target) & SInt(-2)).asUInt
   val mem_wrong_npc =
@@ -1083,19 +1079,19 @@ class RegFile(n: Int, w: Int, zero: Boolean = false) {
 
 object ImmGen {
   def apply(sel: UInt, inst: UInt) = {
-    val sign = Mux(sel === IMM_Z, SInt(0), inst(31).asSInt)
-    val b30_20 = Mux(sel === IMM_U, inst(30,20).asSInt, sign)
-    val b19_12 = Mux(sel =/= IMM_U && sel =/= IMM_UJ, sign, inst(19,12).asSInt)
-    val b11 = Mux(sel === IMM_U || sel === IMM_Z, SInt(0),
-              Mux(sel === IMM_UJ, inst(20).asSInt,
-              Mux(sel === IMM_SB, inst(7).asSInt, sign)))
-    val b10_5 = Mux(sel === IMM_U || sel === IMM_Z, Bits(0), inst(30,25))
-    val b4_1 = Mux(sel === IMM_U, Bits(0),
-               Mux(sel === IMM_S || sel === IMM_SB, inst(11,8),
-               Mux(sel === IMM_Z, inst(19,16), inst(24,21))))
-    val b0 = Mux(sel === IMM_S, inst(7),
-             Mux(sel === IMM_I, inst(20),
-             Mux(sel === IMM_Z, inst(15), Bits(0))))
+    val sign = Mux(sel === IMM.Z, SInt(0), inst(31).asSInt)
+    val b30_20 = Mux(sel === IMM.U, inst(30,20).asSInt, sign)
+    val b19_12 = Mux(sel =/= IMM.U && sel =/= IMM.UJ, sign, inst(19,12).asSInt)
+    val b11 = Mux(sel === IMM.U || sel === IMM.Z, SInt(0),
+              Mux(sel === IMM.UJ, inst(20).asSInt,
+              Mux(sel === IMM.SB, inst(7).asSInt, sign)))
+    val b10_5 = Mux(sel === IMM.U || sel === IMM.Z, Bits(0), inst(30,25))
+    val b4_1 = Mux(sel === IMM.U, Bits(0),
+               Mux(sel === IMM.S || sel === IMM.SB, inst(11,8),
+               Mux(sel === IMM.Z, inst(19,16), inst(24,21))))
+    val b0 = Mux(sel === IMM.S, inst(7),
+             Mux(sel === IMM.I, inst(20),
+             Mux(sel === IMM.Z, inst(15), Bits(0))))
 
     Cat(sign, b30_20, b19_12, b11, b10_5, b4_1, b0).asSInt
   }

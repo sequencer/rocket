@@ -4,8 +4,6 @@ package org.chipsalliance.rocket
 import chisel3._
 import chisel3.util.BitPat
 import chisel3.util.BitPat.bitPatToUInt
-// TODO: introduce these files from build system.
-import freechips.rocketchip.rocket._
 
 object Operands {
   // todo[jiuyang]: These three functions should be add to chisel3.BitPat.
@@ -230,5 +228,12 @@ object Operands {
     val M = BitPat(3.U(width.W))
   }
 
+  object CFI {
+    val width = 2
+    val branch = 0.U(width.W)
+    val jump = 1.U(width.W)
+    val call = 2.U(width.W)
+    val ret = 3.U(width.W)
+  }
 }
 

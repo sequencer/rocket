@@ -3,19 +3,13 @@
 
 package org.chipsalliance.rocket
 
-import Chisel._
-import Chisel.ImplicitConversions._
-import chisel3.{withClock,withReset}
+import chisel3._
 import chisel3.internal.sourceinfo.SourceInfo
 import chisel3.experimental.chiselName
-import freechips.rocketchip.config._
-import freechips.rocketchip.diplomacy._
-import freechips.rocketchip.tile._
-import freechips.rocketchip.util._
-import freechips.rocketchip.util.property
+import chisel3.util.{Decoupled, Valid}
 
-class FrontendReq(implicit p: Parameters) extends CoreBundle()(p) {
-  val pc = UInt(width = vaddrBitsExtended)
+class FrontendReq(vaddrBitsExtended: Int) extends Bundle {
+  val pc = UInt(vaddrBitsExtended.W)
   val speculative = Bool()
 }
 
@@ -31,11 +25,12 @@ class FrontendExceptions extends Bundle {
   }
 }
 
-class FrontendResp(implicit p: Parameters) extends CoreBundle()(p) {
-  val btb = new BTBResp
-  val pc = UInt(width = vaddrBitsExtended)  // ID stage PC
-  val data = UInt(width = fetchWidth * coreInstBits)
-  val mask = Bits(width = fetchWidth)
+class FrontendResp(fetchWidth: Int, vaddrBits: Int, entries: Int, historyLength: Int, counterLength: Int, vaddrBitsExtended: Int, coreInstBits: Int) extends Bundle {
+  val btb = new BTBResp(fetchWidth, vaddrBits, entries, historyLength, counterLength)
+  /** ID stage PC. */
+  val pc = UInt(vaddrBitsExtended.W)
+  val data = UInt((fetchWidth * coreInstBits).W)
+  val mask = UInt(fetchWidth.W)
   val xcpt = new FrontendExceptions
   val replay = Bool()
 }
@@ -45,20 +40,20 @@ class FrontendPerfEvents extends Bundle {
   val tlbMiss = Bool()
 }
 
-class FrontendIO(implicit p: Parameters) extends CoreBundle()(p) {
-  val might_request = Bool(OUTPUT)
-  val clock_enabled = Bool(INPUT)
-  val req = Valid(new FrontendReq)
+class FrontendIO(fetchWidth: Int, vaddrBits: Int, entries: Int, historyLength: Int, counterLength: Int, vaddrBitsExtended: Int, coreInstBits: Int) extends Bundle {
+  val might_request = Output(Bool())
+  val clock_enabled = Input(Bool())
+  val req = Valid(new FrontendReq(vaddrBitsExtended))
   val sfence = Valid(new SFenceReq)
-  val resp = Decoupled(new FrontendResp).flip
+  val resp = Flipped(Decoupled(new FrontendResp(fetchWidth, vaddrBits, entries, historyLength, counterLength, vaddrBitsExtended, coreInstBits)))
   val gpa = Flipped(Valid(UInt(vaddrBitsExtended.W)))
-  val btb_update = Valid(new BTBUpdate)
-  val bht_update = Valid(new BHTUpdate)
-  val ras_update = Valid(new RASUpdate)
-  val flush_icache = Bool(OUTPUT)
-  val npc = UInt(INPUT, width = vaddrBitsExtended)
-  val perf = new FrontendPerfEvents().asInput
-  val progress = Bool(OUTPUT)
+  val btb_update = Valid(new BTBUpdate(vaddrBits, fetchWidth, entries, historyLength, counterLength))
+  val bht_update = Valid(new BHTUpdate(historyLength, counterLength, vaddrBits))
+  val ras_update = Valid(new RASUpdate(vaddrBits))
+  val flush_icache = Output(Bool())
+  val npc = Input(UInt(vaddrBitsExtended.W))
+  val perf = Input(new FrontendPerfEvents())
+  val progress = Output(Bool())
 }
 
 class Frontend(val icacheParams: ICacheParams, staticIdForMetadataUseOnly: Int)(implicit p: Parameters) extends LazyModule {
@@ -69,8 +64,8 @@ class Frontend(val icacheParams: ICacheParams, staticIdForMetadataUseOnly: Int)(
   val resetVectorSinkNode = BundleBridgeSink[UInt](Some(() => UInt(masterNode.edges.out.head.bundle.addressBits.W)))
 }
 
-class FrontendBundle(val outer: Frontend) extends CoreBundle()(outer.p) {
-  val cpu = new FrontendIO().flip
+class FrontendBundle(fetchWidth: Int, vaddrBits: Int, entries: Int, historyLength: Int, counterLength: Int, vaddrBitsExtended: Int, coreInstBits: Int) extends Bundle {
+  val cpu = new FrontendIO(fetchWidth, vaddrBits, entries, historyLength, counterLength, vaddrBitsExtended, coreInstBits).flip
   val ptw = new TLBPTWIO()
   val errors = new ICacheErrors
 }

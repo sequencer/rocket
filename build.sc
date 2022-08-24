@@ -71,6 +71,7 @@ trait rocket extends ScalaModule {
 
 object rocket extends rocket {
   override def scalaVersion = v.scala
+  override def moduleDeps = super.moduleDeps ++ Seq(mycde)
   object tests extends Tests with TestModule.ScalaTest {
     override def ivyDeps = super.ivyDeps() ++ Agg(
       v.utest
