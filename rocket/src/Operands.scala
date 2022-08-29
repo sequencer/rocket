@@ -235,5 +235,10 @@ object Operands {
     val call = 2.U(width.W)
     val ret = 3.U(width.W)
   }
+
+  object FP {
+    val RoundingModeSize = 3
+    val FlagsSize = 5
+  }
 }
 
