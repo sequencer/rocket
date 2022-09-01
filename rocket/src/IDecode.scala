@@ -5,18 +5,9 @@ package org.chipsalliance.rocket
 
 import chisel3._
 import chisel3.util.BitPat
-import org.chipsalliance.cde.config.Parameters
 import Operands._
-import freechips.rocketchip.rocket.Instructions._
-import freechips.rocketchip.rocket.CustomInstructions._
-import freechips.rocketchip.rocket.ALU._
-import freechips.rocketchip.rocket.{DecodeLogic, Instructions32}
-
-
-trait DecodeConstants
-{
-  val table: Array[(BitPat, List[BitPat])]
-}
+import org.chipsalliance.rocket.CustomInstructions._
+import org.chipsalliance.rocket.Instructions._
 
 class IntCtrlSigs extends Bundle {
   val legal = Bool()
@@ -42,7 +33,7 @@ class IntCtrlSigs extends Bundle {
   val mul = Bool()
   val div = Bool()
   val wxd = Bool()
-  val csr = UInt(CSR.width.W)
+  val csr = UInt(CSR.SZ.W)
   val fence_i = Bool()
   val fence = Bool()
   val amo = Bool()
@@ -69,8 +60,7 @@ class IntCtrlSigs extends Bundle {
   }
 }
 
-class IDecode(implicit val p: Parameters) extends Operands
-{
+class IDecode {
   val table: Array[(BitPat, List[BitPat])] = Array(
     BNE->       List(Y,N,N,Y,N,N,Y,Y,N,A2.RS2, A1.RS1, IMM.SB,DW.X,  ALU.SNE,   N, MEM.X,        N,N,N,N,N,N,N,CSR.N,N,N,N,N),
     BEQ->       List(Y,N,N,Y,N,N,Y,Y,N,A2.RS2, A1.RS1, IMM.SB,DW.X,  ALU.SEQ,   N, MEM.X,        N,N,N,N,N,N,N,CSR.N,N,N,N,N),
@@ -125,16 +115,14 @@ class IDecode(implicit val p: Parameters) extends Operands
     CSRRCI->    List(Y,N,N,N,N,N,N,N,N,A2.IMM, A1.ZERO,IMM.Z, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,Y,CSR.C,N,N,N,N))
 }
 
-class FenceIDecode(flushDCache: Boolean)(implicit val p: Parameters) extends Operands
-{
+class FenceIDecode(flushDCache: Boolean) {
   private val (v, cmd) = if (flushDCache) (Y, MEM.FLUSH_ALL) else (N,  MEM.X)
 
   val table: Array[(BitPat, List[BitPat])] = Array(
     FENCE_I->   List(Y,N,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     v,cmd,        N,N,N,N,N,N,N,CSR.N,Y,Y,N,N))
 }
 
-class CFlushDecode(supportsFlushLine: Boolean)(implicit val p: Parameters) extends Operands
-{
+class CFlushDecode(supportsFlushLine: Boolean) {
   private def zapRs1(x: BitPat) = if (supportsFlushLine) x else BitPat(x.value.U)
 
   val table: Array[(BitPat, List[BitPat])] = Array(
@@ -144,20 +132,17 @@ class CFlushDecode(supportsFlushLine: Boolean)(implicit val p: Parameters) exten
                 List(Y,N,N,N,N,N,N,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   Y, MEM.FLUSH_ALL,N,N,N,N,N,N,N,CSR.I,N,N,N,N))
 }
 
-class SVMDecode(implicit val p: Parameters) extends Operands
-{
+class SVMDecode {
   val table: Array[(BitPat, List[BitPat])] = Array(
     SFENCE_VMA->List(Y,N,N,N,N,N,Y,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   Y, MEM.SFENCE,   N,N,N,N,N,N,N,CSR.I,N,N,N,N))
 }
 
-class SDecode(implicit val p: Parameters) extends Operands
-{
+class SDecode {
   val table: Array[(BitPat, List[BitPat])] = Array(
     SRET->      List(Y,N,N,N,N,N,N,X,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        N,N,N,N,N,N,N,CSR.I,N,N,N,N))
 }
 
-class HypervisorDecode(implicit val p: Parameters) extends Operands
-{
+class HypervisorDecode {
   val table: Array[(BitPat, List[BitPat])] = Array(
 
     HFENCE_VVMA->List(Y,N,N,N,N,N,Y,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR, ALU.ADD, Y, MEM.HFENCEV,  N,N,N,N,N,N,N,CSR.I,N,N,N,N),
@@ -176,20 +161,17 @@ class HypervisorDecode(implicit val p: Parameters) extends Operands
     HSV_W->     List(Y,N,N,N,N,N,Y,Y,N,A2.ZERO, A1.RS1, IMM.I, DW.XPR, ALU.ADD, Y, MEM.XWR,      N,N,N,N,N,N,N,CSR.I,N,N,N,N))
 }
 
-class DebugDecode(implicit val p: Parameters) extends Operands
-{
+class DebugDecode {
   val table: Array[(BitPat, List[BitPat])] = Array(
     DRET->      List(Y,N,N,N,N,N,N,X,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        N,N,N,N,N,N,N,CSR.I,N,N,N,N))
 }
 
-class NMIDecode(implicit val p: Parameters) extends Operands
-{
+class NMIDecode {
   val table: Array[(BitPat, List[BitPat])] = Array(
     MNRET->     List(Y,N,N,N,N,N,N,X,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        N,N,N,N,N,N,N,CSR.I,N,N,N,N))
 }
 
-class I32Decode(implicit val p: Parameters) extends Operands
-{
+class I32Decode {
   val table: Array[(BitPat, List[BitPat])] = Array(
     Instructions32.SLLI->
                 List(Y,N,N,N,N,N,N,Y,N,A2.IMM, A1.RS1, IMM.I, DW.XPR,ALU.SL,    N, MEM.X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N),
@@ -199,8 +181,7 @@ class I32Decode(implicit val p: Parameters) extends Operands
                 List(Y,N,N,N,N,N,N,Y,N,A2.IMM, A1.RS1, IMM.I, DW.XPR,ALU.SRA,   N, MEM.X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N))
 }
 
-class I64Decode(implicit val p: Parameters) extends Operands
-{
+class I64Decode {
   val table: Array[(BitPat, List[BitPat])] = Array(
     LD->        List(Y,N,N,N,N,N,N,Y,N,A2.IMM, A1.RS1, IMM.I, DW.XPR,ALU.ADD,   Y, MEM.XRD,      N,N,N,N,N,N,Y,CSR.N,N,N,N,N),
     LWU->       List(Y,N,N,N,N,N,N,Y,N,A2.IMM, A1.RS1, IMM.I, DW.XPR,ALU.ADD,   Y, MEM.XRD,      N,N,N,N,N,N,Y,CSR.N,N,N,N,N),
@@ -221,16 +202,14 @@ class I64Decode(implicit val p: Parameters) extends Operands
     SRAW->      List(Y,N,N,N,N,N,Y,Y,N,A2.RS2, A1.RS1, IMM.X, DW.N,ALU.SRA,    N, MEM.X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N))
 }
 
-class Hypervisor64Decode(implicit val p: Parameters) extends Operands
-{
+class Hypervisor64Decode {
   val table: Array[(BitPat, List[BitPat])] = Array(
     HLV_D->     List(Y,N,N,N,N,N,N,Y,N,A2.ZERO, A1.RS1, IMM.X, DW.XPR, ALU.ADD, Y, MEM.XRD,      N,N,N,N,N,N,Y,CSR.I,N,N,N,N),
     HSV_D->     List(Y,N,N,N,N,N,Y,Y,N,A2.ZERO, A1.RS1, IMM.I, DW.XPR, ALU.ADD, Y, MEM.XWR,      N,N,N,N,N,N,N,CSR.I,N,N,N,N),
     HLV_WU->    List(Y,N,N,N,N,N,N,Y,N,A2.ZERO, A1.RS1, IMM.X, DW.XPR, ALU.ADD, Y, MEM.XRD,      N,N,N,N,N,N,Y,CSR.I,N,N,N,N))
 }
 
-class MDecode(pipelinedMul: Boolean)(implicit val p: Parameters) extends Operands
-{
+class MDecode(pipelinedMul: Boolean) {
   val M = if (pipelinedMul) Y else N
   val D = if (pipelinedMul) N else Y
   val table: Array[(BitPat, List[BitPat])] = Array(
@@ -245,8 +224,7 @@ class MDecode(pipelinedMul: Boolean)(implicit val p: Parameters) extends Operand
     REMU->      List(Y,N,N,N,N,N,Y,Y,N,A2.RS2, A1.RS1, IMM.X, DW.XPR,ALU.REMU,  N, MEM.X,        N,N,N,N,N,Y,Y,CSR.N,N,N,N,N))
 }
 
-class M64Decode(pipelinedMul: Boolean)(implicit val p: Parameters) extends Operands
-{
+class M64Decode(pipelinedMul: Boolean) {
   val M = if (pipelinedMul) Y else N
   val D = if (pipelinedMul) N else Y
   val table: Array[(BitPat, List[BitPat])] = Array(
@@ -258,8 +236,7 @@ class M64Decode(pipelinedMul: Boolean)(implicit val p: Parameters) extends Opera
     REMUW->     List(Y,N,N,N,N,N,Y,Y,N,A2.RS2, A1.RS1, IMM.X, DW.N, ALU.REMU,  N, MEM.X,        N,N,N,N,N,Y,Y,CSR.N,N,N,N,N))
 }
 
-class ADecode(implicit val p: Parameters) extends Operands
-{
+class ADecode {
   val table: Array[(BitPat, List[BitPat])] = Array(
     AMOADD_W->  List(Y,N,N,N,N,N,Y,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   Y, MEM.XA.ADD,   N,N,N,N,N,N,Y,CSR.N,N,N,Y,N),
     AMOXOR_W->  List(Y,N,N,N,N,N,Y,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   Y, MEM.XA.XOR,   N,N,N,N,N,N,Y,CSR.N,N,N,Y,N),
@@ -275,8 +252,7 @@ class ADecode(implicit val p: Parameters) extends Operands
     SC_W->      List(Y,N,N,N,N,N,Y,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   Y, MEM.XSC,      N,N,N,N,N,N,Y,CSR.N,N,N,Y,N))
 }
 
-class A64Decode(implicit val p: Parameters) extends Operands
-{
+class A64Decode {
   val table: Array[(BitPat, List[BitPat])] = Array(
     AMOADD_D->  List(Y,N,N,N,N,N,Y,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   Y, MEM.XA.ADD,   N,N,N,N,N,N,Y,CSR.N,N,N,Y,N),
     AMOSWAP_D-> List(Y,N,N,N,N,N,Y,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   Y, MEM.XA.SWAP,  N,N,N,N,N,N,Y,CSR.N,N,N,Y,N),
@@ -292,8 +268,7 @@ class A64Decode(implicit val p: Parameters) extends Operands
     SC_D->      List(Y,N,N,N,N,N,Y,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   Y, MEM.XSC,      N,N,N,N,N,N,Y,CSR.N,N,N,Y,N))
 }
 
-class HDecode(implicit val p: Parameters) extends Operands
-{
+class HDecode {
   val table: Array[(BitPat, List[BitPat])] = Array(
     FCVT_S_H->  List(Y,Y,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        Y,N,N,Y,N,N,N,CSR.N,N,N,N,N),
     FCVT_H_S->  List(Y,Y,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        Y,N,N,Y,N,N,N,CSR.N,N,N,N,N),
@@ -325,8 +300,7 @@ class HDecode(implicit val p: Parameters) extends Operands
     FSQRT_H->   List(Y,Y,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        Y,Y,N,Y,N,N,N,CSR.N,N,N,N,N))
 }
 
-class FDecode(implicit val p: Parameters) extends Operands
-{
+class FDecode {
   val table: Array[(BitPat, List[BitPat])] = Array(
     FSGNJ_S->   List(Y,Y,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        Y,Y,N,Y,N,N,N,CSR.N,N,N,N,N),
     FSGNJX_S->  List(Y,Y,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        Y,Y,N,Y,N,N,N,CSR.N,N,N,N,N),
@@ -356,8 +330,7 @@ class FDecode(implicit val p: Parameters) extends Operands
     FSQRT_S->   List(Y,Y,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        Y,Y,N,Y,N,N,N,CSR.N,N,N,N,N))
 }
 
-class DDecode(implicit val p: Parameters) extends Operands
-{
+class DDecode {
   val table: Array[(BitPat, List[BitPat])] = Array(
     FCVT_S_D->  List(Y,Y,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        Y,N,N,Y,N,N,N,CSR.N,N,N,N,Y),
     FCVT_D_S->  List(Y,Y,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        Y,N,N,Y,N,N,N,CSR.N,N,N,N,Y),
@@ -387,15 +360,13 @@ class DDecode(implicit val p: Parameters) extends Operands
     FSQRT_D->   List(Y,Y,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        Y,Y,N,Y,N,N,N,CSR.N,N,N,N,Y))
 }
 
-class HDDecode(implicit val p: Parameters) extends Operands
-{
+class HDDecode {
   val table: Array[(BitPat, List[BitPat])] = Array(
     FCVT_D_H->  List(Y,Y,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        Y,N,N,Y,N,N,N,CSR.N,N,N,N,Y),
     FCVT_H_D->  List(Y,Y,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        Y,N,N,Y,N,N,N,CSR.N,N,N,N,Y))
 }
 
-class H64Decode(implicit val p: Parameters) extends Operands
-{
+class H64Decode {
   val table: Array[(BitPat, List[BitPat])] = Array(
     FCVT_L_H->  List(Y,Y,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        Y,N,N,N,N,N,Y,CSR.N,N,N,N,N),
     FCVT_LU_H-> List(Y,Y,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        Y,N,N,N,N,N,Y,CSR.N,N,N,N,N),
@@ -403,8 +374,7 @@ class H64Decode(implicit val p: Parameters) extends Operands
     FCVT_H_LU-> List(Y,Y,N,N,N,N,N,Y,N,A2.X,   A1.RS1, IMM.X, DW.X,  ALU.X,     N, MEM.X,        N,N,N,Y,N,N,N,CSR.N,N,N,N,N))
 }
 
-class F64Decode(implicit val p: Parameters) extends Operands
-{
+class F64Decode {
   val table: Array[(BitPat, List[BitPat])] = Array(
     FCVT_L_S->  List(Y,Y,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        Y,N,N,N,N,N,Y,CSR.N,N,N,N,N),
     FCVT_LU_S-> List(Y,Y,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        Y,N,N,N,N,N,Y,CSR.N,N,N,N,N),
@@ -412,8 +382,7 @@ class F64Decode(implicit val p: Parameters) extends Operands
     FCVT_S_LU-> List(Y,Y,N,N,N,N,N,Y,N,A2.X,   A1.RS1, IMM.X, DW.X,  ALU.X,     N, MEM.X,        N,N,N,Y,N,N,N,CSR.N,N,N,N,N))
 }
 
-class D64Decode(implicit val p: Parameters) extends Operands
-{
+class D64Decode {
   val table: Array[(BitPat, List[BitPat])] = Array(
     FMV_X_D->   List(Y,Y,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        Y,N,N,N,N,N,Y,CSR.N,N,N,N,Y),
     FCVT_L_D->  List(Y,Y,N,N,N,N,N,N,N,A2.X,   A1.X,   IMM.X, DW.X,  ALU.X,     N, MEM.X,        Y,N,N,N,N,N,Y,CSR.N,N,N,N,Y),
@@ -423,37 +392,10 @@ class D64Decode(implicit val p: Parameters) extends Operands
     FCVT_D_LU-> List(Y,Y,N,N,N,N,N,Y,N,A2.X,   A1.RS1, IMM.X, DW.X,  ALU.X,     N, MEM.X,        N,N,N,Y,N,N,N,CSR.N,N,N,N,Y))
 }
 
-class SCIEDecode(implicit val p: Parameters) extends Operands
-{
-  val table: Array[(BitPat, List[BitPat])] = Array(
-    SCIE.opcode->       List(Y,N,N,N,N,N,Y,Y,Y,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.X,     N, MEM.X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N))
+class SCIEDecode {
+  val table: Array[(BitPat, List[BitPat])] = Array()
 }
 
-class RoCCDecode(implicit val p: Parameters) extends Operands
-{
-  val table: Array[(BitPat, List[BitPat])] = Array(
-    CUSTOM0->           List(Y,N,Y,N,N,N,N,N,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,N,CSR.N,N,N,N,N),
-    CUSTOM0_RS1->       List(Y,N,Y,N,N,N,N,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,N,CSR.N,N,N,N,N),
-    CUSTOM0_RS1_RS2->   List(Y,N,Y,N,N,N,Y,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,N,CSR.N,N,N,N,N),
-    CUSTOM0_RD->        List(Y,N,Y,N,N,N,N,N,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N),
-    CUSTOM0_RD_RS1->    List(Y,N,Y,N,N,N,N,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N),
-    CUSTOM0_RD_RS1_RS2->List(Y,N,Y,N,N,N,Y,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N),
-    CUSTOM1->           List(Y,N,Y,N,N,N,N,N,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,N,CSR.N,N,N,N,N),
-    CUSTOM1_RS1->       List(Y,N,Y,N,N,N,N,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,N,CSR.N,N,N,N,N),
-    CUSTOM1_RS1_RS2->   List(Y,N,Y,N,N,N,Y,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,N,CSR.N,N,N,N,N),
-    CUSTOM1_RD->        List(Y,N,Y,N,N,N,N,N,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N),
-    CUSTOM1_RD_RS1->    List(Y,N,Y,N,N,N,N,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N),
-    CUSTOM1_RD_RS1_RS2->List(Y,N,Y,N,N,N,Y,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N),
-    CUSTOM2->           List(Y,N,Y,N,N,N,N,N,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,N,CSR.N,N,N,N,N),
-    CUSTOM2_RS1->       List(Y,N,Y,N,N,N,N,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,N,CSR.N,N,N,N,N),
-    CUSTOM2_RS1_RS2->   List(Y,N,Y,N,N,N,Y,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,N,CSR.N,N,N,N,N),
-    CUSTOM2_RD->        List(Y,N,Y,N,N,N,N,N,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N),
-    CUSTOM2_RD_RS1->    List(Y,N,Y,N,N,N,N,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N),
-    CUSTOM2_RD_RS1_RS2->List(Y,N,Y,N,N,N,Y,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N),
-    CUSTOM3->           List(Y,N,Y,N,N,N,N,N,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,N,CSR.N,N,N,N,N),
-    CUSTOM3_RS1->       List(Y,N,Y,N,N,N,N,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,N,CSR.N,N,N,N,N),
-    CUSTOM3_RS1_RS2->   List(Y,N,Y,N,N,N,Y,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,N,CSR.N,N,N,N,N),
-    CUSTOM3_RD->        List(Y,N,Y,N,N,N,N,N,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N),
-    CUSTOM3_RD_RS1->    List(Y,N,Y,N,N,N,N,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N),
-    CUSTOM3_RD_RS1_RS2->List(Y,N,Y,N,N,N,Y,Y,N,A2.ZERO,A1.RS1, IMM.X, DW.XPR,ALU.ADD,   N, MEM.X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N))
+class RoCCDecode {
+  val table: Array[(BitPat, List[BitPat])] = Array()
 }
