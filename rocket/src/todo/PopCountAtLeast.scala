@@ -19,6 +19,6 @@ object PopCountAtLeast {
     case 0 => true.B
     case 1 => x.orR
     case 2 => two(x)._2
-    case 3 => PopCount(x) >= n.U
+    case _ => PopCount(x) >= n.U
   }
 }
