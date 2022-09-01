@@ -9,6 +9,7 @@ object CustomInstructions {
   def MNRET              = BitPat("b01110000001000000000000001110011")
   def CEASE              = BitPat("b00110000010100000000000001110011")
   def CFLUSH_D_L1        = BitPat("b111111000000?????000000001110011")
+  def CDISCARD_D_L1      = BitPat("b111111000010?????000000001110011")
 }
 
 object CustomCSRs {
