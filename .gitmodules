@@ -10,9 +10,3 @@
 [submodule "dependencies/treadle.git"]
 	path = dependencies/treadle
 	url = git@github.com:chipsalliance/treadle
-[submodule "dependencies/cde.git"]
-	path = dependencies/cde
-	url = git@github.com:chipsalliance/cde
-[submodule "dependencies/diplomacy.git"]
-	path = dependencies/diplomacy
-	url = git@github.com:chipsalliance/diplomacy
