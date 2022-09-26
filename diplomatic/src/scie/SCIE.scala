@@ -1,6 +1,6 @@
 // See LICENSE.SiFive for license details.
 
-package freechips.rocketchip.scie
+package org.chipsalliance.scie
 
 import chisel3._
 import chisel3.util.{BitPat, HasBlackBoxInline}
