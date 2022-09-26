@@ -1,14 +1,14 @@
 // See LICENSE.Berkeley for license details.
 // See LICENSE.SiFive for license details.
 
-package freechips.rocketchip.rocket
+package org.chipsalliance.rocket
 
 import chisel3._
 import chisel3.util._
 import chisel3.internal.InstanceId
 import freechips.rocketchip.config.Parameters
 import freechips.rocketchip.subsystem.CacheBlockBytes
-import freechips.rocketchip.tile.HasCoreParameters
+import org.chipsalliance.rockettile.HasCoreParameters
 import freechips.rocketchip.util._
 
 case class BHTParams(
