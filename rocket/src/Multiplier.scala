@@ -5,7 +5,9 @@ package org.chipsalliance.rocket
 
 import chisel3._
 import chisel3.util.{Cat, Decoupled, Enum, Fill, Log2, Pipe, Valid, log2Ceil, log2Floor, log2Up}
+import org.chipsalliance.rocket.Instructions._
 import org.chipsalliance.rocket.Operands._
+import org.chipsalliance.rocket.todo.implict.SextTo
 
 class MultiplierReq(dataBits: Int, tagBits: Int) extends Bundle {
   val fn: UInt = UInt(ALU.width.W)
@@ -108,7 +110,7 @@ class MulDiv(cfg: MulDivParams, width: Int, nXpr: Int = 32) extends Module {
     val mpcand = divisor.asSInt
     val prod = Cat(mplierSign, mplier(cfg.mulUnroll-1, 0)).asSInt * mpcand + accum
     val nextMulReg = Cat(prod, mplier(mulw-1, cfg.mulUnroll))
-    val nextMplierSign = count === mulw/cfg.mulUnroll-2 && neg_out
+    val nextMplierSign = count === (mulw/cfg.mulUnroll-2).U && neg_out
 
     val eOutMask = ((BigInt(-1) << mulw).S >> (count * cfg.mulUnroll)(log2Up(mulw)-1,0))(mulw-1,0)
     val eOut = (cfg.mulEarlyOut).B && count =/= (mulw/cfg.mulUnroll-1 ).U && count =/= 0.U &&
@@ -117,7 +119,7 @@ class MulDiv(cfg: MulDivParams, width: Int, nXpr: Int = 32) extends Module {
     val nextMulReg1 = Cat(nextMulReg(2*mulw,mulw), Mux(eOut, eOutRes, nextMulReg)(mulw-1,0))
     remainder := Cat(nextMulReg1 >> w, nextMplierSign, nextMulReg1(w-1,0))
 
-    count := count + 1
+    count := count + 1.U
     when (eOut || count === mulw/cfg.mulUnroll-1) {
       state := s_done_mul
       resHi := isHi
@@ -140,29 +142,29 @@ class MulDiv(cfg: MulDivParams, width: Int, nXpr: Int = 32) extends Module {
     }
     count := count + 1
 
-    val divby0: Bool = count === 0 && !subtractor(w)
+    val divby0: Bool = count === 0.U && !subtractor(w)
     if (cfg.divEarlyOut) {
       val align = 1 << log2Floor(cfg.divUnroll max cfg.divEarlyOutGranularity)
       val alignMask: UInt = ~((align-1).U(log2Ceil(w).W))
       val divisorMSB: UInt = Log2(divisor(w - 1, 0), w) & alignMask
       val dividendMSB: UInt = Log2(remainder(w - 1, 0), w) | ~alignMask
       val eOutPos: UInt = ~(dividendMSB - divisorMSB)
-      val eOut = count === 0 && !divby0 && eOutPos >= align.U
+      val eOut = count === 0.U && !divby0 && eOutPos >= align.U
       when (eOut) {
         remainder := remainder(w-1,0) << eOutPos
         count := eOutPos >> log2Floor(cfg.divUnroll)
       }
     }
-    when (divby0 && !isHi) { neg_out := false }
+    when (divby0 && !isHi) { neg_out := false.B }
   }
-  when (io.resp.fire() || io.kill) {
+  when (io.resp.fire || io.kill) {
     state := s_ready
   }
-  when (io.req.fire()) {
+  when (io.req.fire) {
     state := Mux(cmdMul, s_mul, Mux(lhs_sign || rhs_sign, s_neg_inputs, s_div))
     isHi := cmdHi
-    resHi := false
-    count := (if (fastMulW) Mux[UInt](cmdMul && halfWidth(io.req.bits), w/cfg.mulUnroll/2, 0) else 0)
+    resHi := false.B
+    count := (if (fastMulW) Mux[UInt](cmdMul && halfWidth(io.req.bits), (w/cfg.mulUnroll/2).U, 0.U) else 0.U)
     neg_out := Mux(cmdHi, lhs_sign, lhs_sign =/= rhs_sign)
     divisor := Cat(rhs_sign, rhs_in)
     remainder := lhs_in
@@ -179,7 +181,8 @@ class MulDiv(cfg: MulDivParams, width: Int, nXpr: Int = 32) extends Module {
   io.req.ready := state === s_ready
 }
 
-class PipelinedMultiplier(width: Int, latency: Int, nXpr: Int = 32) extends Module with ShouldBeRetimed {
+// TODO: add retime back.
+class PipelinedMultiplier(width: Int, latency: Int, nXpr: Int = 32) extends Module {
   val io = IO(new Bundle {
     val req = Flipped(Valid(new MultiplierReq(width, log2Ceil(nXpr))))
     val resp = Valid(new MultiplierResp(width, log2Ceil(nXpr)))
@@ -188,13 +191,13 @@ class PipelinedMultiplier(width: Int, latency: Int, nXpr: Int = 32) extends Modu
   val in = Pipe(io.req)
 
   val decode = List(
-    FN_MUL    -> List(N, X, X),
-    FN_MULH   -> List(Y, Y, Y),
-    FN_MULHU  -> List(Y, N, N),
-    FN_MULHSU -> List(Y, Y, N))
+    MUL    -> List(N, X, X),
+    MULH   -> List(Y, Y, Y),
+    MULHU  -> List(Y, N, N),
+    MULHSU -> List(Y, Y, N))
   val cmdHi :: lhsSigned :: rhsSigned :: Nil =
     DecodeLogic(in.bits.fn, List(X, X, X), decode).map(_.asBool)
-  val cmdHalf = (width > 32).B && in.bits.dw === DW_32
+  val cmdHalf = (width > 32).B && in.bits.dw === DW.N
 
   val lhs = Cat(lhsSigned && in.bits.in1(width-1), in.bits.in1).asSInt
   val rhs = Cat(rhsSigned && in.bits.in2(width-1), in.bits.in2).asSInt

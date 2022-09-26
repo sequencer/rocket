@@ -4,10 +4,6 @@ package org.chipsalliance.rocket
 
 import chisel3._
 import chisel3.util._
-import freechips.rocketchip.config.Parameters
-import freechips.rocketchip.tile._
-import freechips.rocketchip.util._
-
 class ExpandedInstruction extends Bundle {
   val bits = UInt(32.W)
   val rd = UInt(5.W)

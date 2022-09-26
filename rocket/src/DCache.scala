@@ -2,19 +2,13 @@
 
 package org.chipsalliance.rocket
 
-import Chisel._
-import Chisel.ImplicitConversions._
-import freechips.rocketchip.amba._
-import freechips.rocketchip.config.Parameters
-import freechips.rocketchip.diplomacy._
-import freechips.rocketchip.tile.{CoreBundle, LookupByHartId}
-import freechips.rocketchip.tilelink._
-import freechips.rocketchip.util._
-import freechips.rocketchip.util.property
-import chisel3.{DontCare, WireInit, dontTouch, withClock}
-import chisel3.experimental.{chiselName, NoChiselNamePrefix}
+import chisel3._
+import chisel3.{DontCare, dontTouch, withClock}
+import chisel3.experimental.AffectsChiselPrefix
 import chisel3.internal.sourceinfo.SourceInfo
-import TLMessages._
+import chisel3.util.Valid
+import org.chipsalliance.rocket.todo.Code
+import org.chipsalliance.rocket.todo.implict.Grouped
 
 // TODO: delete this trait once deduplication is smart enough to avoid globally inlining matching circuits
 trait InlineInstance { self: chisel3.experimental.BaseModule =>
@@ -23,61 +17,75 @@ trait InlineInstance { self: chisel3.experimental.BaseModule =>
       def toFirrtl: firrtl.annotations.Annotation = firrtl.passes.InlineAnnotation(self.toNamed) } )
 }
 
-class DCacheErrors(implicit p: Parameters) extends L1HellaCacheBundle()(p)
-    with CanHaveErrors {
-  val correctable = (cacheParams.tagCode.canCorrect || cacheParams.dataCode.canCorrect).option(Valid(UInt(width = paddrBits)))
-  val uncorrectable = (cacheParams.tagCode.canDetect || cacheParams.dataCode.canDetect).option(Valid(UInt(width = paddrBits)))
-  val bus = Valid(UInt(width = paddrBits))
+class DCacheErrors(tagCode: Code, dataCode: Code, paddrBits: Int) extends Bundle {
+  val correctable = if(tagCode.canCorrect || dataCode.canCorrect) Some(Valid(UInt(paddrBits.W))) else None
+  val uncorrectable = if(tagCode.canDetect || dataCode.canDetect) Some(Valid(UInt(paddrBits.W))) else None
+  val bus = Valid(UInt(paddrBits.W))
 }
 
-class DCacheDataReq(implicit p: Parameters) extends L1HellaCacheBundle()(p) {
-  val addr = Bits(width = untagBits)
+class DCacheDataReq(untagBits: Int, encBits: Int, rowBytes: Int, eccBytes: Int, subWordBytes: Int, wordBytes: Int, nWays: Int) extends Bundle {
+  val addr = UInt(untagBits.W)
   val write = Bool()
-  val wdata = UInt(width = encBits * rowBytes / eccBytes)
-  val wordMask = UInt(width = rowBytes / subWordBytes)
-  val eccMask = UInt(width = wordBytes / eccBytes)
-  val way_en = Bits(width = nWays)
+  val wdata = UInt((encBits * rowBytes / eccBytes).W)
+  val wordMask = UInt((rowBytes / subWordBytes).W)
+  val eccMask = UInt((wordBytes / eccBytes).W)
+  val way_en = UInt(nWays.W)
 }
 
-class DCacheDataArray(implicit p: Parameters) extends L1HellaCacheModule()(p) {
+class DCacheDataArray(
+  untagBits: Int,
+  encBits: Int,
+  rowBytes: Int,
+  eccBytes: Int,
+  subWordBytes: Int,
+  wordBytes: Int,
+  nWays: Int,
+  rowBits: Int,
+  rowOffBits: Int,
+  subWordBits: Int,
+  eccBits: Int,
+  nSets: Int,
+  cacheBlockBytes: Int,
+  wordBits: Int) extends Module {
   val io = new Bundle {
-    val req = Valid(new DCacheDataReq).flip
-    val resp = Vec(nWays, UInt(width = req.bits.wdata.getWidth)).asOutput
+    val req = Flipped(Valid(new DCacheDataReq(untagBits, encBits, rowBytes, eccBytes, subWordBytes, wordBytes, nWays)))
+    val resp = Output(Vec(nWays, UInt(req.bits.wdata.getWidth.W)))
   }
 
   require(rowBits % subWordBits == 0, "rowBits must be a multiple of subWordBits")
-  val eccMask = if (eccBits == subWordBits) Seq(true.B) else io.req.bits.eccMask.asBools
+  val eccMask = if (eccBits == subWordBits) VecInit(Seq(true.B)) else io.req.bits.eccMask.asBools
   val wMask = if (nWays == 1) eccMask else (0 until nWays).flatMap(i => eccMask.map(_ && io.req.bits.way_en(i)))
   val wWords = io.req.bits.wdata.grouped(encBits * (subWordBits / eccBits))
-  val addr = io.req.bits.addr >> rowOffBits
+  val addr: UInt = io.req.bits.addr >> rowOffBits
   val data_arrays = Seq.tabulate(rowBits / subWordBits) {
-    i =>
-      DescribedSRAM(
-        name = s"data_arrays_${i}",
-        desc = "DCache Data Array",
-        size = nSets * cacheBlockBytes / rowBytes,
-        data = Vec(nWays * (subWordBits / eccBits), UInt(width = encBits))
-      )
+    i => SyncReadMem(
+      nSets * cacheBlockBytes / rowBytes,
+      Vec(nWays * (subWordBits / eccBits), UInt(encBits.W))
+    ).suggestName(s"data_arrays_${i}")
   }
 
   val rdata = for ((array , i) <- data_arrays zipWithIndex) yield {
-    val valid = io.req.valid && (Bool(data_arrays.size == 1) || io.req.bits.wordMask(i))
+    val valid = io.req.valid && ((data_arrays.size == 1).B || io.req.bits.wordMask(i))
     when (valid && io.req.bits.write) {
       val wMaskSlice = (0 until wMask.size).filter(j => i % (wordBits/subWordBits) == (j % (wordBytes/eccBytes)) / (subWordBytes/eccBytes)).map(wMask(_))
       val wData = wWords(i).grouped(encBits)
-      array.write(addr, Vec((0 until nWays).flatMap(i => wData)), wMaskSlice)
+      array.write(addr, VecInit((0 until nWays).flatMap(i => wData)), wMaskSlice)
     }
     val data = array.read(addr, valid && !io.req.bits.write)
-    data.grouped(subWordBits / eccBits).map(_.asUInt).toSeq
+    data.grouped(subWordBits / eccBits).map(VecInit(_).asUInt).toSeq
   }
-  (io.resp zip rdata.transpose).foreach { case (resp, data) => resp := data.asUInt }
+  (io.resp zip rdata.transpose).foreach { case (resp, data) => resp := VecInit(data).asUInt }
 }
 
-class DCacheMetadataReq(implicit p: Parameters) extends L1HellaCacheBundle()(p) {
+class DCacheMetadataReq(
+  vaddrBitsExtended: Int,
+  idxBits: Int,
+  nWays: Int,
+  tagCode: Code) extends Bundle {
   val write = Bool()
-  val addr = UInt(width = vaddrBitsExtended)
-  val idx = UInt(width = idxBits)
-  val way_en = UInt(width = nWays)
+  val addr = UInt(vaddrBitsExtended.W)
+  val idx = UInt(idxBits.W)
+  val way_en = UInt(nWays.W)
   val data = UInt(width = cacheParams.tagCode.width(new L1Metadata().getWidth))
 }
 
@@ -91,7 +99,6 @@ class DCacheTLBPort(implicit p: Parameters) extends CoreBundle()(p) {
   val s2_kill = Input(Bool())
 }
 
-@chiselName
 class DCacheModule(outer: DCache) extends HellaCacheModule(outer) {
   val tlb_port = IO(new DCacheTLBPort)
 
@@ -110,7 +117,7 @@ class DCacheModule(outer: DCache) extends HellaCacheModule(outer) {
   val gated_clock =
     if (!cacheParams.clockGate) clock
     else ClockGate(clock, clock_en_reg, "dcache_clock_gate")
-  @chiselName class DCacheModuleImpl extends NoChiselNamePrefix { // entering gated-clock domain
+  @chiselName class DCacheModuleImpl extends AffectsChiselPrefix { // entering gated-clock domain
 
   val tlb = Module(new TLB(false, log2Ceil(coreDataBytes), TLBConfig(nTLBSets, nTLBWays, cacheParams.nTLBBasePageSectors, cacheParams.nTLBSuperpages)))
   val pma_checker = Module(new TLB(false, log2Ceil(coreDataBytes), TLBConfig(nTLBSets, nTLBWays, cacheParams.nTLBBasePageSectors, cacheParams.nTLBSuperpages)) with InlineInstance)
@@ -167,14 +174,14 @@ class DCacheModule(outer: DCache) extends HellaCacheModule(outer) {
   val s2_tlb_req_valid = RegNext(s1_tlb_req_valid, false.B)
   val s0_clk_en = metaArb.io.out.valid && !metaArb.io.out.bits.write
 
-  val s0_req = WireInit(io.cpu.req.bits)
+  val s0_req = WireDefault(io.cpu.req.bits)
   s0_req.addr := Cat(metaArb.io.out.bits.addr >> blockOffBits, io.cpu.req.bits.addr(blockOffBits-1,0))
   s0_req.idx.foreach(_ := Cat(metaArb.io.out.bits.idx, s0_req.addr(blockOffBits-1, 0)))
   when (!metaArb.io.in(7).ready) { s0_req.phys := true }
   val s1_req = RegEnable(s0_req, s0_clk_en)
   val s1_vaddr = Cat(s1_req.idx.getOrElse(s1_req.addr) >> tagLSB, s1_req.addr(tagLSB-1, 0))
 
-  val s0_tlb_req = WireInit(tlb_port.req.bits)
+  val s0_tlb_req = WireDefault(tlb_port.req.bits)
   when (!tlb_port.req.fire()) {
     s0_tlb_req.passthrough := s0_req.phys
     s0_tlb_req.vaddr := s0_req.addr
@@ -213,7 +220,7 @@ class DCacheModule(outer: DCache) extends HellaCacheModule(outer) {
   // I/O MSHRs
   val uncachedInFlight = RegInit(Vec.fill(maxUncachedInFlight)(false.B))
   val uncachedReqs = Reg(Vec(maxUncachedInFlight, new HellaCacheReq))
-  val uncachedResp = WireInit(new HellaCacheReq, DontCare)
+  val uncachedResp = WireDefault(new HellaCacheReq, DontCare)
 
   // hit initiation path
   val s0_read = isRead(io.cpu.req.bits.cmd)

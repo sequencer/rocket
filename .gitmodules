@@ -10,3 +10,6 @@
 [submodule "dependencies/treadle.git"]
 	path = dependencies/treadle
 	url = git@github.com:chipsalliance/treadle
+[submodule "dependencies/tilelink"]
+	path = dependencies/tilelink
+	url = git@github.com:sequencer/tilelink.git

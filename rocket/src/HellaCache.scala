@@ -5,12 +5,8 @@ package org.chipsalliance.rocket
 
 import Chisel._
 import chisel3.dontTouch
-import freechips.rocketchip.amba._
-import freechips.rocketchip.config.{Parameters, Field}
-import freechips.rocketchip.diplomacy._
-import freechips.rocketchip.tile._
-import freechips.rocketchip.tilelink._
-import freechips.rocketchip.util._
+import org.chipsalliance.rocket.todo.Code
+
 import scala.collection.mutable.ListBuffer
 
 case class DCacheParams(
@@ -100,38 +96,60 @@ abstract class L1HellaCacheBundle(implicit val p: Parameters) extends Parameteri
 
 /** Bundle definitions for HellaCache interfaces */
 
-trait HasCoreMemOp extends HasL1HellaCacheParameters {
-  val addr = UInt(width = coreMaxAddrBits)
-  val idx  = (usingVM && untagBits > pgIdxBits).option(UInt(coreMaxAddrBits.W))
-  val tag  = Bits(width = coreParams.dcacheReqTagBits + log2Ceil(dcacheArbPorts))
-  val cmd  = Bits(width = M_SZ)
-  val size = Bits(width = log2Ceil(coreDataBytes.log2 + 1))
+trait HasCoreMemOp extends Bundle {
+  def coreMaxAddrBits: Int
+  def usingVM: Boolean
+  def untagBits: Int
+  def pgIdxBits: Int
+  def dcacheReqTagBits: Int
+  def dcacheArbPorts: Int
+  def coreDataBytes: Int
+  val addr = UInt(coreMaxAddrBits.W)
+  val idx  = if (usingVM && untagBits > pgIdxBits) Some(UInt(coreMaxAddrBits.W)) else None
+  val tag  = UInt((dcacheReqTagBits + log2Ceil(dcacheArbPorts)).W)
+  val cmd  = UInt(width = Operands.MEM.width)
+  val size = UInt(width = log2Ceil(log2Ceil(coreDataBytes) + 1))
   val signed = Bool()
   val dprv = UInt(width = PRV.SZ)
   val dv = Bool()
 }
 
-trait HasCoreData extends HasCoreParameters {
-  val data = Bits(width = coreDataBits)
-  val mask = UInt(width = coreDataBytes)
+trait HasCoreData extends Bundle {
+  def coreDataBits: Int
+  def coreDataBytes: Int
+
+  val data = UInt(coreDataBits.W)
+  val mask = UInt(coreDataBytes.W)
 }
 
-class HellaCacheReqInternal(implicit p: Parameters) extends CoreBundle()(p) with HasCoreMemOp {
+trait HellaCacheReqInternal extends HasCoreMemOp {
   val phys = Bool()
   val no_alloc = Bool()
   val no_xcpt = Bool()
 }
 
-class HellaCacheReq(implicit p: Parameters) extends HellaCacheReqInternal()(p) with HasCoreData
+class HellaCacheReq(val coreDataBits: Int,
+                    val coreDataBytes: Int,
+                    val coreMaxAddrBits: Int,
+                    val usingVM: Boolean,
+                    val untagBits: Int,
+                    val pgIdxBits: Int,
+                    val dcacheReqTagBits: Int,
+                    val dcacheArbPorts: Int) extends HellaCacheReqInternal with HasCoreData
 
-class HellaCacheResp(implicit p: Parameters) extends CoreBundle()(p)
-    with HasCoreMemOp
-    with HasCoreData {
+class HellaCacheResp(val coreDataBits: Int,
+                     val coreDataBytes: Int,
+                     val coreMaxAddrBits: Int,
+                     val usingVM: Boolean,
+                     val untagBits: Int,
+                     val pgIdxBits: Int,
+                     val dcacheReqTagBits: Int,
+                     val dcacheArbPorts: Int) extends HasCoreMemOp with HasCoreData {
   val replay = Bool()
   val has_data = Bool()
-  val data_word_bypass = Bits(width = coreDataBits)
-  val data_raw = Bits(width = coreDataBits)
-  val store_data = Bits(width = coreDataBits)
+  val data_word_bypass = UInt(coreDataBits.W)
+  val data_raw = UInt(coreDataBits.W)
+  val store_data = UInt(coreDataBits.W)
 }
 
 class AlignmentExceptions extends Bundle {
@@ -146,7 +164,7 @@ class HellaCacheExceptions extends Bundle {
   val ae = new AlignmentExceptions
 }
 
-class HellaCacheWriteData(implicit p: Parameters) extends CoreBundle()(p) with HasCoreData
+class HellaCacheWriteData(val coreDataBits: Int, val coreDataBytes: Int) extends HasCoreData
 
 class HellaCachePerfEvents extends Bundle {
   val acquire = Bool()
@@ -162,27 +180,46 @@ class HellaCachePerfEvents extends Bundle {
 }
 
 // interface between D$ and processor/DTLB
-class HellaCacheIO(implicit p: Parameters) extends CoreBundle()(p) {
-  val req = Decoupled(new HellaCacheReq)
-  val s1_kill = Bool(OUTPUT) // kill previous cycle's req
-  val s1_data = new HellaCacheWriteData().asOutput // data for previous cycle's req
-  val s2_nack = Bool(INPUT) // req from two cycles ago is rejected
-  val s2_nack_cause_raw = Bool(INPUT) // reason for nack is store-load RAW hazard (performance hint)
-  val s2_kill = Bool(OUTPUT) // kill req from two cycles ago
-  val s2_uncached = Bool(INPUT) // advisory signal that the access is MMIO
-  val s2_paddr = UInt(INPUT, paddrBits) // translated address
+class HellaCacheIO(val coreDataBits: Int,
+                   val coreDataBytes: Int,
+                   val coreMaxAddrBits: Int,
+                   val usingVM: Boolean,
+                   val untagBits: Int,
+                   val pgIdxBits: Int,
+                   val dcacheReqTagBits: Int,
+                   val dcacheArbPorts: Int,
+                   val paddrBits: Int,
+                   val vaddrBitsExtended: Int,
+                   val separateUncachedResp: Boolean) extends Bundle {
+  val req = Decoupled(new HellaCacheReq(coreDataBits, coreDataBytes, coreMaxAddrBits, usingVM, untagBits, pgIdxBits, dcacheReqTagBits, dcacheArbPorts))
+  /** kill previous cycle's req */
+  val s1_kill = Output(Bool())
+  /** data for previous cycle's req */
+  val s1_data = Output(new HellaCacheWriteData(coreDataBits, coreDataBytes))
+  /** req from two cycles ago is rejected */
+  val s2_nack = Input(Bool())
+  /** reason for nack is store-load RAW hazard (performance hint) */
+  val s2_nack_cause_raw = Input(Bool())
+  /** kill req from two cycles ago */
+  val s2_kill = Output(Bool())
+  /** advisory signal that the access is MMIO */
+  val s2_uncached = Input(Bool())
+  /** translated address */
+  val s2_paddr = Input(UInt(paddrBits.W))
 
-  val resp = Valid(new HellaCacheResp).flip
-  val replay_next = Bool(INPUT)
-  val s2_xcpt = (new HellaCacheExceptions).asInput
-  val s2_gpa = UInt(vaddrBitsExtended.W).asInput
-  val s2_gpa_is_pte = Bool(INPUT)
-  val uncached_resp = tileParams.dcache.get.separateUncachedResp.option(Decoupled(new HellaCacheResp).flip)
-  val ordered = Bool(INPUT)
-  val perf = new HellaCachePerfEvents().asInput
+  val resp = Flipped(Valid(new HellaCacheResp(coreDataBits, coreDataBytes, coreMaxAddrBits, usingVM, untagBits, pgIdxBits, dcacheReqTagBits, dcacheArbPorts)))
+  val replay_next = Input(Bool())
+  val s2_xcpt = Input(new HellaCacheExceptions)
+  val s2_gpa = Input(UInt(vaddrBitsExtended.W))
+  val s2_gpa_is_pte = Input(Bool())
+  val uncached_resp = if (separateUncachedResp) Some(Decoupled(new HellaCacheResp(coreDataBits, coreDataBytes, coreMaxAddrBits, usingVM, untagBits, pgIdxBits, dcacheReqTagBits, dcacheArbPorts)).flip) else None
+  val ordered = Input(Bool())
+  val perf = Input(new HellaCachePerfEvents())
 
-  val keep_clock_enabled = Bool(OUTPUT) // should D$ avoid clock-gating itself?
-  val clock_enabled = Bool(INPUT) // is D$ currently being clocked?
+  /** should D$ avoid clock-gating itself? */
+  val keep_clock_enabled = Output(Bool())
+  /** is D$ currently being clocked? */
+  val clock_enabled = Input(Bool())
 }
 
 /** Base classes for Diplomatic TL2 HellaCaches */
@@ -220,10 +257,30 @@ abstract class HellaCache(staticIdForMetadataUseOnly: Int)(implicit p: Parameter
   require(!tileParams.core.haveCFlush || cfg.scratch.isEmpty, "CFLUSH_D_L1 instruction requires a D$")
 }
 
-class HellaCacheBundle(val outer: HellaCache)(implicit p: Parameters) extends CoreBundle()(p) {
-  val cpu = (new HellaCacheIO).flip
-  val ptw = new TLBPTWIO()
-  val errors = new DCacheErrors
+class HellaCacheBundle(val coreDataBits: Int,
+                       val coreDataBytes: Int,
+                       val coreMaxAddrBits: Int,
+                       val usingVM: Boolean,
+                       val untagBits: Int,
+                       val pgIdxBits: Int,
+                       val dcacheReqTagBits: Int,
+                       val dcacheArbPorts: Int,
+                       val paddrBits: Int,
+                       val vaddrBitsExtended: Int,
+                       val separateUncachedResp: Boolean,
+                       val vpnBits: Int,
+                       val pgLevels: Int,
+                       val vaddrBits: Int,
+                       val minPgLevels: Int,
+                       val maxPAddrBits: Int,
+                       val xLen: Int,
+                       val nPMPs: Int,
+                       val tagCode: Code,
+                       val dataCode: Code,
+                       val customCSRsBundle: CustomCSRs) extends Bundle {
+  val cpu = Flipped(new HellaCacheIO(coreDataBits, coreDataBytes, coreMaxAddrBits, usingVM, untagBits, pgIdxBits, dcacheReqTagBits, dcacheArbPorts, paddrBits, vaddrBitsExtended, separateUncachedResp))
+  val ptw = new TLBPTWIO(vpnBits, pgLevels, vaddrBits, minPgLevels, maxPAddrBits, pgIdxBits, xLen, nPMPs, customCSRsBundle)
+  val errors = new DCacheErrors(tagCode, dataCode, paddrBits)
 }
 
 class HellaCacheModule(outer: HellaCache) extends LazyModuleImp(outer)
@@ -280,9 +337,9 @@ trait HasHellaCacheModule {
 
 /** Metadata array used for all HellaCaches */
 
-class L1Metadata(implicit p: Parameters) extends L1HellaCacheBundle()(p) {
+class L1Metadata(tagBits: Int) extends Bundle {
   val coh = new ClientMetadata
-  val tag = UInt(width = tagBits)
+  val tag = UInt(tagBits.W)
 }
 
 object L1Metadata {

@@ -3,10 +3,10 @@
 
 package org.chipsalliance.rocket
 
-import Chisel._
-import Chisel.ImplicitConversions._
-import chisel3.withClock
-import chisel3.experimental.{chiselName, NoChiselNamePrefix}
+import chisel3._
+import chisel3.experimental.{AffectsChiselPrefix, NoChiselNamePrefix}
+import chisel3.util.{Cat, RegEnable}
+
 import scala.collection.mutable.ArrayBuffer
 import org.chipsalliance.rocket.Operands._
 
@@ -103,7 +103,6 @@ class RocketCustomCSRs(implicit p: Parameters) extends CustomCSRs with HasRocket
   override def decls = super.decls :+ marchid :+ mvendorid :+ mimpid
 }
 
-@chiselName
 class Rocket(tile: RocketTile)(implicit p: Parameters) extends CoreModule()(p)
     with HasRocketCoreParameters
     with HasCoreIO {
@@ -117,7 +116,7 @@ class Rocket(tile: RocketTile)(implicit p: Parameters) extends CoreModule()(p)
     if (!rocketParams.clockGate) clock
     else ClockGate(clock, clock_en, "rocket_clock_gate")
 
-  @chiselName class RocketImpl extends NoChiselNamePrefix { // entering gated-clock domain
+  class RocketImpl extends AffectsChiselPrefix { // entering gated-clock domain
 
   // performance counters
   def pipelineIDToWB[T <: Data](x: T): T =

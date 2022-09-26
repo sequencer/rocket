@@ -4,7 +4,6 @@
 package org.chipsalliance.rocket
 
 import chisel3._
-import chisel3.WireInit
 import chisel3.util.{Cat, Mux1H, OHToUInt, Pipe, UIntToOH, Valid, isPow2, log2Ceil, log2Up}
 import Operands.CFI
 import org.chipsalliance.rocket.todo.{PopCountAtLeast, PseudoLRU}
@@ -16,7 +15,7 @@ case class BHTParams(
                       historyBits: Int = 3) {
   require(isPow2(nEntries))
 
-  def nEntriesLog2 = log2Ceil(nEntries)
+  def nEntriesLog2: Int = log2Ceil(nEntries)
 
 }
 
@@ -49,18 +48,18 @@ class RAS(nras: Int) {
 
   def isEmpty: Bool = count === 0.U
 
-  private val count = RegInit(0.U(log2Up(nras + 1).W))
-  private val pos = RegInit(0.U(log2Up(nras).W))
-  private val stack = Reg(Vec(nras, UInt()))
+  private val count: UInt = RegInit(0.U(log2Up(nras + 1).W))
+  private val pos: UInt = RegInit(0.U(log2Up(nras).W))
+  private val stack: Vec[UInt] = Reg(Vec(nras, UInt()))
 }
 
 class BHTResp(historyLength: Int, counterLength: Int) extends Bundle {
-  val history = UInt(historyLength.W)
-  val value = UInt(counterLength.W)
+  val history: UInt = UInt(historyLength.W)
+  val value: UInt = UInt(counterLength.W)
 
-  def taken = value(0)
+  def taken: Bool = value(0)
 
-  def strongly_taken = value === 1
+  def strongly_taken: Bool = value === 1.U
 }
 
 // BHT contains table of 2-bit counters and a global history register.
@@ -119,13 +118,13 @@ class BHT(params: BHTParams, fetchBytes: Int, historyLength: Int, counterLength:
   }
 
   private val table = Mem(params.nEntries, UInt(params.counterLength.W))
-  val history = RegInit(0.U(params.historyLength.W))
+  val history: UInt = RegInit(0.U(params.historyLength.W))
 
-  private val reset_waddr = RegInit(0.U((params.nEntriesLog2 + 1).W))
-  private val resetting = !reset_waddr(params.nEntriesLog2)
-  private val wen = WireInit(resetting)
-  private val waddr = WireInit(reset_waddr)
-  private val wdata = WireInit(0.U)
+  private val reset_waddr: UInt = RegInit(0.U((params.nEntriesLog2 + 1).W))
+  private val resetting: Bool = !reset_waddr(params.nEntriesLog2)
+  private val wen: Bool = WireDefault(resetting)
+  private val waddr: UInt = WireDefault(reset_waddr)
+  private val wdata: UInt = WireDefault(0.U)
   when(resetting) {
     reset_waddr := reset_waddr + 1
   }
@@ -138,28 +137,28 @@ class BHT(params: BHTParams, fetchBytes: Int, historyLength: Int, counterLength:
 //  - "pc" is what future fetch PCs will tag match against.
 //  - "br_pc" is the PC of the branch instruction.
 class BTBUpdate(vaddrBits: Int, fetchWidth: Int, entries: Int, historyLength: Int, counterLength: Int) extends Bundle {
-  val prediction = new BTBResp(fetchWidth, vaddrBits, entries, historyLength, counterLength)
-  val pc = UInt(vaddrBits.W)
-  val target = UInt(vaddrBits.W)
-  val taken = Bool()
-  val isValid = Bool()
-  val br_pc = UInt(vaddrBits.W)
-  val cfiType = UInt(CFI.width.W)
+  val prediction: BTBResp = new BTBResp(fetchWidth, vaddrBits, entries, historyLength, counterLength)
+  val pc: UInt = UInt(vaddrBits.W)
+  val target: UInt = UInt(vaddrBits.W)
+  val taken: Bool = Bool()
+  val isValid: Bool = Bool()
+  val br_pc: UInt = UInt(vaddrBits.W)
+  val cfiType: UInt = UInt(CFI.width.W)
 }
 
 // BHT update occurs during branch resolution on all conditional branches.
 //  - "pc" is what future fetch PCs will tag match against.
 class BHTUpdate(historyLength: Int, counterLength: Int, vaddrBits: Int) extends Bundle {
-  val prediction = new BHTResp(historyLength, counterLength)
-  val pc = UInt(vaddrBits.W)
-  val branch = Bool()
-  val taken = Bool()
-  val mispredict = Bool()
+  val prediction: BHTResp = new BHTResp(historyLength, counterLength)
+  val pc: UInt = UInt(vaddrBits.W)
+  val branch: Bool = Bool()
+  val taken: Bool = Bool()
+  val mispredict: Bool = Bool()
 }
 
 class RASUpdate(vaddrBits: Int) extends Bundle {
-  val cfiType = UInt(CFI.width.W)
-  val returnAddr = UInt(vaddrBits.W)
+  val cfiType: UInt = UInt(CFI.width.W)
+  val returnAddr: UInt = UInt(vaddrBits.W)
 }
 
 //  - "bridx" is the low-order PC bits of the predicted branch (after
@@ -167,28 +166,28 @@ class RASUpdate(vaddrBits: Int) extends Bundle {
 //  - "mask" provides a mask of valid instructions (instructions are
 //     masked off by the predicted taken branch from the BTB).
 class BTBResp(fetchWidth: Int, vaddrBits: Int, entries: Int, historyLength: Int, counterLength: Int) extends Bundle {
-  val cfiType = UInt(CFI.width.W)
-  val taken = Bool()
-  val mask = UInt(fetchWidth.W)
-  val bridx = UInt(log2Up(fetchWidth).W)
-  val target = UInt(vaddrBits.W)
-  val entry = UInt(log2Up(entries + 1).W)
-  val bht = new BHTResp(historyLength, counterLength)
+  val cfiType: UInt = UInt(CFI.width.W)
+  val taken: Bool = Bool()
+  val mask: UInt = UInt(fetchWidth.W)
+  val bridx: UInt = UInt(log2Up(fetchWidth).W)
+  val target: UInt = UInt(vaddrBits.W)
+  val entry: UInt = UInt(log2Up(entries + 1).W)
+  val bht: BHTResp = new BHTResp(historyLength, counterLength)
 }
 
 class BTBReq(vaddrBits: Int) extends Bundle {
-  val addr = UInt(vaddrBits.W)
+  val addr: UInt = UInt(vaddrBits.W)
 }
 
 class BTBIO(vaddrBits: Int, fetchWidth: Int, entries: Int, historyLength: Int, counterLength: Int, cacheBlockBytes: Int) extends Bundle {
-  val req = Flipped(Valid(new BTBReq(vaddrBits)))
-  val resp = Valid(new BTBResp(fetchWidth, vaddrBits, entries, historyLength, counterLength))
-  val btb_update = Flipped(Valid(new BTBUpdate(vaddrBits, fetchWidth, entries, historyLength, counterLength)))
-  val bht_update = Flipped(Valid(new BHTUpdate(historyLength, counterLength, vaddrBits)))
-  val bht_advance = Flipped(Valid(new BTBResp(fetchWidth, vaddrBits, entries, historyLength, counterLength)))
-  val ras_update = Flipped(Valid(new RASUpdate(vaddrBits)))
-  val ras_head = Valid(UInt(vaddrBits.W))
-  val flush = Input(Bool())
+  val req: Valid[BTBReq] = Flipped(Valid(new BTBReq(vaddrBits)))
+  val resp: Valid[BTBResp] = Valid(new BTBResp(fetchWidth, vaddrBits, entries, historyLength, counterLength))
+  val btb_update: Valid[BTBUpdate] = Flipped(Valid(new BTBUpdate(vaddrBits, fetchWidth, entries, historyLength, counterLength)))
+  val bht_update: Valid[BHTUpdate] = Flipped(Valid(new BHTUpdate(historyLength, counterLength, vaddrBits)))
+  val bht_advance: Valid[BTBResp] = Flipped(Valid(new BTBResp(fetchWidth, vaddrBits, entries, historyLength, counterLength)))
+  val ras_update: Valid[RASUpdate] = Flipped(Valid(new RASUpdate(vaddrBits)))
+  val ras_head: Valid[UInt] = Valid(UInt(vaddrBits.W))
+  val flush: Bool = Input(Bool())
 }
 
 // fully-associative branch target buffer
@@ -261,20 +260,20 @@ class BTB(btbParams: BTBParams, vaddrBits: Int, fetchWidth: Int, historyLength: 
   val tgtPageReplEn: UInt = Mux(doTgtPageRepl, tgtPageRepl, 0.U)
 
   when(r_btb_update.valid && (doIdxPageRepl || doTgtPageRepl)) {
-    val both = doIdxPageRepl && doTgtPageRepl
-    val next = nextPageRepl + Mux(both, 2.U, 1.U)
+    val both: Bool = doIdxPageRepl && doTgtPageRepl
+    val next: UInt = nextPageRepl + Mux(both, 2.U, 1.U)
     nextPageRepl := Mux(next >= nPages.U, next(0), next)
   }
 
-  val repl = new PseudoLRU(entries)
-  val waddr = Mux(updateHit, updateHitAddr, repl.way)
-  val r_resp = Pipe(io.resp)
+  val repl: PseudoLRU = new PseudoLRU(entries)
+  val waddr: UInt = Mux(updateHit, updateHitAddr, repl.way)
+  val r_resp: Valid[BTBResp] = Pipe(io.resp)
   when(r_resp.valid && r_resp.bits.taken || r_btb_update.valid) {
     repl.access(Mux(r_btb_update.valid, waddr, r_resp.bits.entry))
   }
 
   when(r_btb_update.valid) {
-    val mask = UIntToOH(waddr)
+    val mask: UInt = UIntToOH(waddr)
     idxs(waddr) := r_btb_update.bits.pc(matchBits - 1, log2Up(coreInstBytes))
     tgts(waddr) := update_target(matchBits - 1, log2Up(coreInstBytes))
     // the +1 corresponds to the <<1 on io.resp.valid
@@ -286,9 +285,9 @@ class BTB(btbParams: BTBParams, vaddrBits: Int, fetchWidth: Int, historyLength: 
       brIdx(waddr) := r_btb_update.bits.br_pc >> log2Up(coreInstBytes)
 
     require(nPages % 2 == 0)
-    val idxWritesEven = !idxPageUpdate(0)
+    val idxWritesEven: Bool = !idxPageUpdate(0)
 
-    def writeBank(i: Int, mod: Int, en: UInt, data: UInt) =
+    def writeBank(i: Int, mod: Int, en: UInt, data: UInt): Unit =
       for (i <- i until nPages by mod)
         when(en(i)) {
           pages(i) := data
@@ -306,7 +305,7 @@ class BTB(btbParams: BTBParams, vaddrBits: Int, fetchWidth: Int, historyLength: 
   io.resp.bits.target := Cat(pagesMasked(Mux1H(idxHit, tgtPages)), Mux1H(idxHit, tgts) << log2Up(coreInstBytes))
   io.resp.bits.entry := OHToUInt(idxHit)
   io.resp.bits.bridx := (if (fetchWidth > 1) Mux1H(idxHit, brIdx) else 0.U)
-  io.resp.bits.mask := Cat((1.U << ~Mux(io.resp.bits.taken, ~io.resp.bits.bridx, 0.U)) - 1, 1.U)
+  io.resp.bits.mask := Cat((1.U << ~Mux(io.resp.bits.taken, ~io.resp.bits.bridx, 0.U): UInt) - 1.U, 1.U)
   io.resp.bits.cfiType := Mux1H(idxHit, cfiType)
 
   // if multiple entries for same PC land in BTB, zap them
@@ -318,9 +317,9 @@ class BTB(btbParams: BTBParams, vaddrBits: Int, fetchWidth: Int, historyLength: 
   }
 
   btbParams.bhtParams.foreach {bhtParams =>
-    val bht = new BHT(btbParams.bhtParams.get, coreFetchBytes, historyLength, counterLength)
-    val isBranch = (idxHit & VecInit(cfiType.map(_ === CFI.branch)).asUInt).orR
-    val res = bht.get(io.req.bits.addr)
+    val bht: BHT = new BHT(btbParams.bhtParams.get, coreFetchBytes, historyLength, counterLength)
+    val isBranch: Bool = (idxHit & VecInit(cfiType.map(_ === CFI.branch)).asUInt).orR
+    val res: BHTResp = bht.get(io.req.bits.addr)
     when(io.bht_advance.valid) {
       bht.advanceHistory(io.bht_advance.bits.bht.taken)
     }
@@ -341,8 +340,8 @@ class BTB(btbParams: BTBParams, vaddrBits: Int, fetchWidth: Int, historyLength: 
   }
 
   if (btbParams.nRAS > 0) {
-    val ras = new RAS(btbParams.nRAS)
-    val doPeek = (idxHit & VecInit(cfiType.map(_ === CFI.ret)).asUInt).orR
+    val ras: RAS = new RAS(btbParams.nRAS)
+    val doPeek: Bool = (idxHit & VecInit(cfiType.map(_ === CFI.ret)).asUInt).orR
     io.ras_head.valid := !ras.isEmpty
     io.ras_head.bits := ras.peek
     when(!ras.isEmpty && doPeek) {

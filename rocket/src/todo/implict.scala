@@ -25,5 +25,9 @@ package object implict {
     }
   }
 
+  implicit class Grouped(private val x: UInt) extends AnyVal {
+    def grouped(width: Int): Vec[UInt] =
+      VecInit((0 until x.getWidth by width).map(base => x(base + width - 1, base)))
+  }
 
 }

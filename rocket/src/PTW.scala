@@ -3,21 +3,19 @@
 
 package org.chipsalliance.rocket
 
-import Chisel._
-import Chisel.ImplicitConversions._
-import chisel3.withClock
-import chisel3.internal.sourceinfo.SourceInfo
-import chisel3.experimental.chiselName
+import chisel3._
+import chisel3.util.{Decoupled, Valid, log2Ceil}
+
 import scala.collection.mutable.ListBuffer
 
 class PTWReq(vpnBits: Int) extends Bundle {
-  val addr = UInt(width = vpnBits)
+  val addr = UInt(vpnBits.W)
   val need_gpa = Bool()
   val vstage1 = Bool()
   val stage2 = Bool()
 }
 
-class PTWResp(implicit p: Parameters) extends CoreBundle()(p) {
+class PTWResp(pgLevels: Int, vaddrBits: Int) extends Bundle {
   val ae_ptw = Bool()
   val ae_final = Bool()
   val pf = Bool()
@@ -26,24 +24,33 @@ class PTWResp(implicit p: Parameters) extends CoreBundle()(p) {
   val hw = Bool()
   val hx = Bool()
   val pte = new PTE
-  val level = UInt(width = log2Ceil(pgLevels))
+  val level = UInt(log2Ceil(pgLevels).W)
   val fragmented_superpage = Bool()
   val homogeneous = Bool()
   val gpa = Valid(UInt(vaddrBits.W))
   val gpa_is_pte = Bool()
 }
 
-class TLBPTWIO extends Bundle {
-  val req = Decoupled(Valid(new PTWReq))
-  val resp = Valid(new PTWResp).flip
-  val ptbr = new PTBR().asInput
-  val hgatp = new PTBR().asInput
-  val vsatp = new PTBR().asInput
-  val status = new MStatus().asInput
-  val hstatus = new HStatus().asInput
-  val gstatus = new MStatus().asInput
-  val pmp = Vec(nPMPs, new PMP).asInput
-  val customCSRs = coreParams.customCSRs.asInput
+class TLBPTWIO(vpnBits: Int,
+               pgLevels: Int,
+               vaddrBits: Int,
+               minPgLevels: Int,
+               maxPAddrBits: Int,
+               pgIdxBits: Int,
+               xLen: Int,
+               nPMPs: Int,
+               customCSRsBundle: CustomCSRs
+              ) extends Bundle {
+  val req = Decoupled(Valid(new PTWReq(vpnBits)))
+  val resp = Flipped(Valid(new PTWResp(pgLevels, vaddrBits)))
+  val ptbr = Input(new PTBR(pgLevels, minPgLevels, maxPAddrBits, pgIdxBits, xLen))
+  val hgatp = Input(new PTBR(pgLevels, minPgLevels, maxPAddrBits, pgIdxBits, xLen))
+  val vsatp = Input(new PTBR(pgLevels, minPgLevels, maxPAddrBits, pgIdxBits, xLen))
+  val status = Input(new MStatus)
+  val hstatus = Input(new HStatus)
+  val gstatus = Input(new MStatus)
+  val pmp = Input(Vec(nPMPs, new PMP))
+  val customCSRs = Input(customCSRsBundle)
 }
 
 class PTWPerfEvents extends Bundle {
@@ -53,25 +60,24 @@ class PTWPerfEvents extends Bundle {
   val pte_hit = Bool()
 }
 
-class DatapathPTWIO(implicit p: Parameters) extends CoreBundle()(p)
-    with HasCoreParameters {
-  val ptbr = new PTBR().asInput
-  val hgatp = new PTBR().asInput
-  val vsatp = new PTBR().asInput
-  val sfence = Valid(new SFenceReq).flip
-  val status = new MStatus().asInput
-  val hstatus = new HStatus().asInput
-  val gstatus = new MStatus().asInput
-  val pmp = Vec(nPMPs, new PMP).asInput
-  val perf = new PTWPerfEvents().asOutput
-  val customCSRs = coreParams.customCSRs.asInput
-  val clock_enabled = Bool(OUTPUT)
+class DatapathPTWIO(pgLevels: Int, minPgLevels: Int, maxPAddrBits: Int, pgIdxBits: Int, xLen: Int, nPMPs: Int, customCSRsBundle: CustomCSRs) extends Bundle {
+  val ptbr = Input(new PTBR(pgLevels, minPgLevels, maxPAddrBits, pgIdxBits, xLen))
+  val hgatp = Input(new PTBR(pgLevels, minPgLevels, maxPAddrBits, pgIdxBits, xLen))
+  val vsatp = Input(new PTBR(pgLevels, minPgLevels, maxPAddrBits, pgIdxBits, xLen))
+  val sfence = Flipped(Valid(new SFenceReq))
+  val status = Input(new MStatus)
+  val hstatus = Input(new HStatus)
+  val gstatus = Input(new MStatus)
+  val pmp = Input(Vec(nPMPs, new PMP))
+  val perf = Output(new PTWPerfEvents())
+  val customCSRs = Input(customCSRsBundle)
+  val clock_enabled = Output(Bool())
 }
 
-class PTE(implicit p: Parameters) extends CoreBundle()(p) {
-  val reserved_for_future = UInt(width = 10)
-  val ppn = UInt(width = 44)
-  val reserved_for_software = Bits(width = 2)
+class PTE extends Bundle {
+  val reserved_for_future = UInt(10.W)
+  val ppn = UInt(44.W)
+  val reserved_for_software = UInt(2.W)
   val d = Bool()
   val a = Bool()
   val g = Bool()
@@ -81,33 +87,31 @@ class PTE(implicit p: Parameters) extends CoreBundle()(p) {
   val r = Bool()
   val v = Bool()
 
-  def table(dummy: Int = 0) = v && !r && !w && !x && !d && !a && !u && reserved_for_future === 0
-  def leaf(dummy: Int = 0) = v && (r || (x && !w)) && a
-  def ur(dummy: Int = 0) = sr() && u
-  def uw(dummy: Int = 0) = sw() && u
-  def ux(dummy: Int = 0) = sx() && u
-  def sr(dummy: Int = 0) = leaf() && r
-  def sw(dummy: Int = 0) = leaf() && w && d
-  def sx(dummy: Int = 0) = leaf() && x
-  def isFullPerm(dummy: Int = 0) = uw() && ux()
+  def table = v && !r && !w && !x && !d && !a && !u && reserved_for_future === 0.U
+  def leaf = v && (r || (x && !w)) && a
+  def ur = sr && u
+  def uw = sw && u
+  def ux = sx && u
+  def sr = leaf && r
+  def sw = leaf && w && d
+  def sx = leaf && x
+  def isFullPerm = uw && ux
 }
 
-class L2TLBEntry(nSets: Int)(implicit p: Parameters) extends CoreBundle()(p)
-    with HasCoreParameters {
-  val idxBits = log2Ceil(nSets)
-  val tagBits = maxSVAddrBits - pgIdxBits - idxBits + (if (usingHypervisor) 1 else 0)
-  val tag = UInt(width = tagBits)
-  val ppn = UInt(width = ppnBits)
+class L2TLBEntry(nSets: Int, maxSVAddrBits: Int, pgIdxBits: Int, usingHypervisor: Boolean, ppnBits: Int) extends Bundle {
+  def idxBits = log2Ceil(nSets)
+  def tagBits = maxSVAddrBits - pgIdxBits - idxBits + (if (usingHypervisor) 1 else 0)
+
+  val tag = UInt(tagBits.W)
+  val ppn = UInt(ppnBits.W)
   val d = Bool()
   val a = Bool()
   val u = Bool()
   val x = Bool()
   val w = Bool()
   val r = Bool()
-
 }
 
-@chiselName
 class PTW(n: Int)(implicit edge: TLEdgeOut, p: Parameters) extends CoreModule()(p) {
   val io = new Bundle {
     val requestor = Vec(n, new TLBPTWIO).flip

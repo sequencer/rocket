@@ -17,11 +17,11 @@ class EventSet(val gate: (UInt, UInt) => Bool, val events: Seq[(String, () => Bo
   }
   def dump(): Unit = {
     for (((name, _), i) <- events.zipWithIndex)
-      when (check(1.U << i)) { printf(s"Event $name\n") }
+      when (check(1.U << i: UInt)) { printf(s"Event $name\n") }
   }
   def withCovers: Unit = {
     events.zipWithIndex.foreach {
-      case ((name, func), i) => cover(gate(1.U << i, func() << i), name)
+      case ((name, func), i) => cover(gate(1.U << i: UInt, func() << i), name)
     }
   }
 }
@@ -37,7 +37,7 @@ class EventSets(val eventSets: Seq[EventSet]) {
   private def decode(counter: UInt): (UInt, UInt) = {
     require(eventSets.size <= (1 << maxEventSetIdBits))
     require(eventSetIdBits > 0)
-    (counter(eventSetIdBits-1, 0), counter >> maxEventSetIdBits)
+    (counter(eventSetIdBits-1, 0), counter >> maxEventSetIdBits: UInt)
   }
 
   def evaluate(eventSel: UInt): Bool = {

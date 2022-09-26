@@ -3,21 +3,20 @@
 
 package org.chipsalliance.rocket
 
-import Chisel._
-import freechips.rocketchip.config.Parameters
+import chisel3._
 
-class HellaCacheArbiter(n: Int)(implicit p: Parameters) extends Module
+class HellaCacheArbiter(n: Int) extends Module
 {
-  val io = new Bundle {
-    val requestor = Vec(n, new HellaCacheIO).flip
+  val io = IO(new Bundle {
+    val requestor = Flipped(Vec(n, new HellaCacheIO))
     val mem = new HellaCacheIO
-  }
+  })
 
   if (n == 1) {
     io.mem <> io.requestor.head
   } else {
     val s1_id = Reg(UInt())
-    val s2_id = Reg(next=s1_id)
+    val s2_id = RegNext(s1_id)
 
     io.mem.keep_clock_enabled := io.requestor.map(_.keep_clock_enabled).reduce(_||_)
 
