@@ -1,12 +1,12 @@
 // See LICENSE.SiFive for license details.
 // See LICENSE.Berkeley for license details.
 
-package freechips.rocketchip.rocket
+package org.chipsalliance.rocket
 
 import chisel3._
 import chisel3.util.{BitPat, Fill, Cat, Reverse}
 import freechips.rocketchip.config.Parameters
-import freechips.rocketchip.tile.CoreModule
+import org.chipsalliance.rockettile.CoreModule
 
 object ALU
 {

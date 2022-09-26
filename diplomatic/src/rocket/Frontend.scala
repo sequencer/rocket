@@ -1,7 +1,7 @@
 // See LICENSE.Berkeley for license details.
 // See LICENSE.SiFive for license details.
 
-package freechips.rocketchip.rocket
+package org.chipsalliance.rocket
 
 import Chisel._
 import Chisel.ImplicitConversions._
@@ -9,7 +9,7 @@ import chisel3.{withClock,withReset}
 import chisel3.internal.sourceinfo.SourceInfo
 import freechips.rocketchip.config._
 import freechips.rocketchip.diplomacy._
-import freechips.rocketchip.tile._
+import org.chipsalliance.rockettile._
 import freechips.rocketchip.util._
 import freechips.rocketchip.util.property
 
