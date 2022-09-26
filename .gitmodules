@@ -1,9 +1,24 @@
-[submodule "hardfloat"]
-	path = hardfloat
-	url = https://github.com/ucb-bar/berkeley-hardfloat.git
-[submodule "torture"]
-	path = torture
-	url = https://github.com/ucb-bar/riscv-torture.git
-[submodule "api-config-chipsalliance"]
-	path = api-config-chipsalliance
-	url = https://github.com/chipsalliance/api-config-chipsalliance.git
+[submodule "dependencies/chisel3.git"]
+	path = dependencies/chisel3
+	url = git@github.com:chipsalliance/chisel3
+[submodule "dependencies/chiseltest.git"]
+	path = dependencies/chiseltest
+	url = git@github.com:ucb-bar/chiseltest
+[submodule "dependencies/firrtl.git"]
+	path = dependencies/firrtl
+	url = git@github.com:chipsalliance/firrtl
+[submodule "dependencies/treadle.git"]
+	path = dependencies/treadle
+	url = git@github.com:chipsalliance/treadle
+[submodule "dependencies/rocket-chip"]
+	path = dependencies/rocket-chip
+	url = git@github.com:chipsalliance/rocket-chip.git
+[submodule "dependencies/cde"]
+	path = dependencies/cde
+	url = git@github.com:chipsalliance/cde.git
+[submodule "dependencies/berkeley-hardfloat"]
+	path = dependencies/berkeley-hardfloat
+	url = git@github.com:ucb-bar/berkeley-hardfloat.git
+[submodule "dependencies/tilelink"]
+	path = dependencies/tilelink
+	url = git@github.com:sequencer/tilelink.git
