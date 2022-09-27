@@ -1,4 +1,4 @@
-package sanitytests.rocketchip
+package rocket.tests
 
 import chipsalliance.rocketchip.config.Config
 import chisel3.RawModule

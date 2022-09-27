@@ -1,4 +1,4 @@
-package sanitytests.rocketchip
+package rocket.tests
 
 import utest._
 
@@ -13,9 +13,10 @@ object VerilatorTest extends TestSuite {
   val outputDirectory = os.pwd / "out" / "VerilatorTest"
   os.remove.all(outputDirectory)
   os.makeDir(outputDirectory)
+  println(os.read(resource("bootrom.S")))
   val tests = Tests {
     test("build TestHarness emulator") {
-      val testHarness = classOf[freechips.rocketchip.system.TestHarness]
+      val testHarness = classOf[DUT]
       val configs = Seq(classOf[TestConfig], classOf[freechips.rocketchip.system.DefaultConfig])
       val emulator = TestHarness(testHarness, configs, Some(outputDirectory)).emulator
       test("build hello") {

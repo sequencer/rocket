@@ -1,7 +1,7 @@
-package sanitytests
+package rocket
 
 import os._
 
-package object rocketchip {
+package object tests {
   def resource(file: String): Path = Path(java.nio.file.Paths.get(getClass().getClassLoader().getResource(file).toURI))
 }
