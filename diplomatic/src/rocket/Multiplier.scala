@@ -6,10 +6,10 @@ package org.chipsalliance.rocket
 import chisel3._
 import chisel3.util.{Cat, log2Up, log2Ceil, log2Floor, Log2, Decoupled, Enum, Fill, Valid, Pipe}
 import freechips.rocketchip.util._
-import ALU._
+import org.chipsalliance.rocket.Operands.ALU
 
 class MultiplierReq(dataBits: Int, tagBits: Int) extends Bundle {
-  val fn = Bits(SZ_ALU_FN.W)
+  val fn = Bits(ALU.width.W)
   val dw = Bits(SZ_DW.W)
   val in1 = Bits(dataBits.W)
   val in2 = Bits(dataBits.W)
@@ -59,15 +59,15 @@ class MulDiv(cfg: MulDivParams, width: Int, nXpr: Int = 32) extends Module {
   val remainder = Reg(Bits((2*mulw+2).W)) // div only needs 2*w+1 bits
 
   val mulDecode = List(
-    FN_MUL    -> List(Y, N, X, X),
-    FN_MULH   -> List(Y, Y, Y, Y),
-    FN_MULHU  -> List(Y, Y, N, N),
-    FN_MULHSU -> List(Y, Y, Y, N))
+    ALU.MUL    -> List(Y, N, X, X),
+    ALU.MULH   -> List(Y, Y, Y, Y),
+    ALU.MULHU  -> List(Y, Y, N, N),
+    ALU.MULHSU -> List(Y, Y, Y, N))
   val divDecode = List(
-    FN_DIV    -> List(N, N, Y, Y),
-    FN_REM    -> List(N, Y, Y, Y),
-    FN_DIVU   -> List(N, N, N, N),
-    FN_REMU   -> List(N, Y, N, N))
+    ALU.DIV    -> List(N, N, Y, Y),
+    ALU.REM    -> List(N, Y, Y, Y),
+    ALU.DIVU   -> List(N, N, N, N),
+    ALU.REMU   -> List(N, Y, N, N))
   val cmdMul :: cmdHi :: lhsSigned :: rhsSigned :: Nil =
     DecodeLogic(io.req.bits.fn, List(X, X, X, X),
       (if (cfg.divUnroll != 0) divDecode else Nil) ++ (if (cfg.mulUnroll != 0) mulDecode else Nil)).map(_.asBool)
@@ -189,10 +189,10 @@ class PipelinedMultiplier(width: Int, latency: Int, nXpr: Int = 32) extends Modu
   val in = Pipe(io.req)
 
   val decode = List(
-    FN_MUL    -> List(N, X, X),
-    FN_MULH   -> List(Y, Y, Y),
-    FN_MULHU  -> List(Y, N, N),
-    FN_MULHSU -> List(Y, Y, N))
+    ALU.MUL    -> List(N, X, X),
+    ALU.MULH   -> List(Y, Y, Y),
+    ALU.MULHU  -> List(Y, N, N),
+    ALU.MULHSU -> List(Y, Y, N))
   val cmdHi :: lhsSigned :: rhsSigned :: Nil =
     DecodeLogic(in.bits.fn, List(X, X, X), decode).map(_.asBool)
   val cmdHalf = (width > 32).B && in.bits.dw === DW_32
