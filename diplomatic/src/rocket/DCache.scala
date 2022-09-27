@@ -15,6 +15,7 @@ import chisel3.{DontCare, WireInit, dontTouch, withClock}
 import chisel3.experimental.{chiselName, NoChiselNamePrefix}
 import chisel3.internal.sourceinfo.SourceInfo
 import TLMessages._
+import org.chipsalliance.rocket.Operands.MEM.XA
 
 // TODO: delete this trait once deduplication is smart enough to avoid globally inlining matching circuits
 trait InlineInstance { self: chisel3.experimental.BaseModule =>
@@ -560,15 +561,15 @@ class DCacheModule(outer: DCache) extends HellaCacheModule(outer) {
   val putpartial = edge.Put(a_source, access_address, a_size, a_data, a_mask)._2
   val atomics = if (edge.manager.anySupportLogical) {
     MuxLookup(s2_req.cmd, WireDefault(0.U.asTypeOf(new TLBundleA(edge.bundle))), Array(
-      M_XA_SWAP -> edge.Logical(a_source, access_address, a_size, a_data, TLAtomics.SWAP)._2,
-      M_XA_XOR  -> edge.Logical(a_source, access_address, a_size, a_data, TLAtomics.XOR) ._2,
-      M_XA_OR   -> edge.Logical(a_source, access_address, a_size, a_data, TLAtomics.OR)  ._2,
-      M_XA_AND  -> edge.Logical(a_source, access_address, a_size, a_data, TLAtomics.AND) ._2,
-      M_XA_ADD  -> edge.Arithmetic(a_source, access_address, a_size, a_data, TLAtomics.ADD)._2,
-      M_XA_MIN  -> edge.Arithmetic(a_source, access_address, a_size, a_data, TLAtomics.MIN)._2,
-      M_XA_MAX  -> edge.Arithmetic(a_source, access_address, a_size, a_data, TLAtomics.MAX)._2,
-      M_XA_MINU -> edge.Arithmetic(a_source, access_address, a_size, a_data, TLAtomics.MINU)._2,
-      M_XA_MAXU -> edge.Arithmetic(a_source, access_address, a_size, a_data, TLAtomics.MAXU)._2))
+      XA.SWAP -> edge.Logical(a_source, access_address, a_size, a_data, TLAtomics.SWAP)._2,
+      XA.XOR  -> edge.Logical(a_source, access_address, a_size, a_data, TLAtomics.XOR) ._2,
+      XA.OR   -> edge.Logical(a_source, access_address, a_size, a_data, TLAtomics.OR)  ._2,
+      XA.AND  -> edge.Logical(a_source, access_address, a_size, a_data, TLAtomics.AND) ._2,
+      XA.ADD  -> edge.Arithmetic(a_source, access_address, a_size, a_data, TLAtomics.ADD)._2,
+      XA.MIN  -> edge.Arithmetic(a_source, access_address, a_size, a_data, TLAtomics.MIN)._2,
+      XA.MAX  -> edge.Arithmetic(a_source, access_address, a_size, a_data, TLAtomics.MAX)._2,
+      XA.MINU -> edge.Arithmetic(a_source, access_address, a_size, a_data, TLAtomics.MINU)._2,
+      XA.MAXU -> edge.Arithmetic(a_source, access_address, a_size, a_data, TLAtomics.MAXU)._2))
   } else {
     // If no managers support atomics, assert fail if processor asks for them
     assert (!(tl_out_a.valid && s2_read && s2_write && s2_uncached))
