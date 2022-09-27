@@ -27,5 +27,43 @@ object Operands {
       val MAXU = "b01111".U(width.W)
     }
   }
+
+  /** double word uop. */
+  object DW {
+    val width: Int = 1
+    val X: BitPat = BitPat.dontCare(width)
+    val N: BitPat = BitPat.N(width)
+    val Y: BitPat = BitPat.Y(width)
+    // todo: jiuyang thinks here is for X propagation but not for sure.
+    val XPR: BitPat = Y
+  }
+
+  /** ALU uop */
+  object ALU {
+    val width: Int = 4
+    val X: BitPat = BitPat.dontCare(width)
+    val ADD = 0.U(width.W)
+    val SL = 1.U(width.W)
+    val SEQ = 2.U(width.W)
+    val SNE = 3.U(width.W)
+    val XOR = 4.U(width.W)
+    val SR = 5.U(width.W)
+    val OR = 6.U(width.W)
+    val AND = 7.U(width.W)
+    val SUB = 10.U(width.W)
+    val SRA = 11.U(width.W)
+    val SLT = 12.U(width.W)
+    val SGE = 13.U(width.W)
+    val SLTU = 14.U(width.W)
+    val SGEU = 15.U(width.W)
+    val DIV = XOR
+    val DIVU = SR
+    val REM = OR
+    val REMU = AND
+    val MUL = ADD
+    val MULH = SL
+    val MULHSU = SEQ
+    val MULHU = SNE
+  }
 }
 
