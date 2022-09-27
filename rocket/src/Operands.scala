@@ -31,11 +31,11 @@ object Operands {
   /** double word uop. */
   object DW {
     val width: Int = 1
-    val X: BitPat = BitPat.dontCare(width)
-    val N: BitPat = BitPat.N(width)
-    val Y: BitPat = BitPat.Y(width)
+    val X = BitPat.dontCare(width)
+    val N = false.B
+    val Y = true.B
     // todo: jiuyang thinks here is for X propagation but not for sure.
-    val XPR: BitPat = Y
+    val XPR = Y
   }
 
   /** ALU uop */
