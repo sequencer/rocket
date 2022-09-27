@@ -15,10 +15,6 @@ import $file.dependencies.chiseltest.build
 import $file.dependencies.tilelink.common
 import $file.common
 
-object helper {
-  val isMac = System.getProperty("os.name").toLowerCase.startsWith("mac")
-}
-
 object v {
   val scala = "2.12.16"
   val chisel3 = ivy"edu.berkeley.cs::chisel3:3.6-SNAPSHOT"
@@ -99,12 +95,7 @@ object diplomatic extends common.DiplomaticModule { m =>
     override def moduleDeps = super.moduleDeps ++ Seq(diplomatic)
 
     override def resources: Sources = T.sources {
-      super.resources()
+      super.resources() /* ++ libraryResources() */
     }
   }
-}
-
-// CI Tests
-object sanitytests extends ScalaModule {
-  override def scalaVersion = T { v.scala }
 }
