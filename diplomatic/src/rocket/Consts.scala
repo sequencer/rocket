@@ -5,6 +5,7 @@ package org.chipsalliance.rocket.constants
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.util._
+import org.chipsalliance.rocket.Operands
 
 trait ScalarOpConstants {
   val SZ_BR = 3
@@ -69,8 +70,8 @@ trait MemoryOpConstants {
   def M_WOK     = "b10111".U // check write permissions but don't perform a write
   def M_HLVX    = "b10000".U // HLVX instruction
 
-  def isAMOLogical(cmd: UInt) = cmd.isOneOf(M_XA_SWAP, M_XA_XOR, M_XA_OR, M_XA_AND)
-  def isAMOArithmetic(cmd: UInt) = cmd.isOneOf(M_XA_ADD, M_XA_MIN, M_XA_MAX, M_XA_MINU, M_XA_MAXU)
+  def isAMOLogical(cmd: UInt) = cmd.isOneOf(Operands.MEM.XA.SWAP, Operands.MEM.XA.XOR, Operands.MEM.XA.OR, Operands.MEM.XA.AND)
+  def isAMOArithmetic(cmd: UInt) = cmd.isOneOf(Operands.MEM.XA.ADD, Operands.MEM.XA.MIN, Operands.MEM.XA.MAX, Operands.MEM.XA.MINU, Operands.MEM.XA.MAXU)
   def isAMO(cmd: UInt) = isAMOLogical(cmd) || isAMOArithmetic(cmd)
   def isPrefetch(cmd: UInt) = cmd === M_PFR || cmd === M_PFW
   def isRead(cmd: UInt) = cmd.isOneOf(M_XRD, M_HLVX, M_XLR, M_XSC) || isAMO(cmd)
