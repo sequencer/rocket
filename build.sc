@@ -2,6 +2,8 @@ import mill._
 import mill.scalalib._
 import mill.scalalib.publish._
 import mill.scalalib.scalafmt._
+import mill.modules.Util
+import mill.define.Sources
 import coursier.maven.MavenRepository
 import $file.dependencies.cde.build
 import $file.dependencies.`berkeley-hardfloat`.build
@@ -13,11 +15,16 @@ import $file.dependencies.chiseltest.build
 import $file.dependencies.tilelink.common
 import $file.common
 
+object helper {
+  val isMac = System.getProperty("os.name").toLowerCase.startsWith("mac")
+}
+
 object v {
   val scala = "2.12.16"
   val chisel3 = ivy"edu.berkeley.cs::chisel3:3.6-SNAPSHOT"
   val chisel3Plugin = ivy"edu.berkeley.cs::chisel3-plugin:3.6-SNAPSHOT"
   val macroParadise = ivy"org.scalamacros:::paradise:2.1.1"
+  val utest = ivy"com.lihaoyi::utest:0.7.10"
 }
 
 object myfirrtl extends dependencies.firrtl.build.firrtlCrossModule(v.scala) {
@@ -83,4 +90,21 @@ object diplomatic extends common.DiplomaticModule { m =>
   def macroParadiseIvy = v.macroParadise
   // TODO: remove -Xsource:2.11
   override def scalacOptions = T { Seq("-Xsource:2.11", s"-Xplugin:${mychisel3.plugin.jar().path}") }
+
+  object tests extends Tests with ScalaModule with TestModule.Utest {
+    override def ivyDeps = Agg(
+      v.utest
+    )
+
+    override def moduleDeps = super.moduleDeps ++ Seq(diplomatic)
+
+    override def resources: Sources = T.sources {
+      super.resources()
+    }
+  }
+}
+
+// CI Tests
+object sanitytests extends ScalaModule {
+  override def scalaVersion = T { v.scala }
 }
