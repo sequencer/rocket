@@ -5,7 +5,7 @@ package org.chipsalliance.rocket
 
 import chisel3._
 import chisel3.util._
-import freechips.rocketchip.config.Parameters
+import org.chipsalliance.rocket.Operands.MEM
 
 class StoreGen(typ: UInt, addr: UInt, dat: UInt, maxSize: Int) {
   val size = typ(log2Up(log2Up(maxSize)+1)-1,0)
@@ -48,25 +48,25 @@ class LoadGen(typ: UInt, signed: Bool, addr: UInt, dat: UInt, zero: Bool, maxSiz
   def wordData = genData(2)
   def data = genData(0)
 }
-
-class AMOALU(operandBits: Int)(implicit p: Parameters) extends Module {
+class AMOALUIO(operandBits: Int) extends Bundle {
+  val mask = Input(UInt((operandBits / 8).W))
+  val cmd = Input(UInt(MEM.width.W))
+  val lhs = Input(UInt(operandBits.W))
+  val rhs = Input(UInt(operandBits.W))
+  val out = Output(UInt(operandBits.W))
+  val out_unmasked = Output(UInt(operandBits.W))
+}
+class AMOALU(operandBits: Int) extends Module {
   val minXLen = 32
   val widths = (0 to log2Ceil(operandBits / minXLen)).map(minXLen << _)
 
-  val io = IO(new Bundle {
-    val mask = Input(UInt((operandBits / 8).W))
-    val cmd = Input(UInt(M_SZ.W))
-    val lhs = Input(UInt(operandBits.W))
-    val rhs = Input(UInt(operandBits.W))
-    val out = Output(UInt(operandBits.W))
-    val out_unmasked = Output(UInt(operandBits.W))
-  })
+  val io = IO(new AMOALUIO(operandBits))
 
-  val max = io.cmd === M_XA_MAX || io.cmd === M_XA_MAXU
-  val min = io.cmd === M_XA_MIN || io.cmd === M_XA_MINU
-  val add = io.cmd === M_XA_ADD
-  val logic_and = io.cmd === M_XA_OR || io.cmd === M_XA_AND
-  val logic_xor = io.cmd === M_XA_XOR || io.cmd === M_XA_OR
+  val max = io.cmd === MEM.XA.MAX || io.cmd === MEM.XA.MAXU
+  val min = io.cmd === MEM.XA.MIN || io.cmd === MEM.XA.MINU
+  val add = io.cmd === MEM.XA.ADD
+  val logic_and = io.cmd === MEM.XA.OR || io.cmd === MEM.XA.AND
+  val logic_xor = io.cmd === MEM.XA.XOR || io.cmd === MEM.XA.OR
 
   val adder_out = {
     // partition the carry chain to support sub-xLen addition
@@ -83,8 +83,8 @@ class AMOALU(operandBits: Int)(implicit p: Parameters) extends Module {
 
     def isLess(x: UInt, y: UInt, n: Int): Bool = {
       val signed = {
-        val mask = M_XA_MIN ^ M_XA_MINU
-        (io.cmd & mask) === (M_XA_MIN & mask)
+        val mask = MEM.XA.MIN ^ MEM.XA.MINU
+        (io.cmd & mask) === (MEM.XA.MIN & mask)
       }
       Mux(x(n-1) === y(n-1), isLessUnsigned(x, y, n), Mux(signed, x(n-1), y(n-1)))
     }
