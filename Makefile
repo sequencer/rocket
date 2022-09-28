@@ -24,7 +24,7 @@ compile:
 	mill -i -j 0 __.compile
 
 test:
-	mill -i -j 0 sanitytests.rocketchip
+	mill -i -j 0 diplomatic.tests
 
 clean:
 	git clean -fd
