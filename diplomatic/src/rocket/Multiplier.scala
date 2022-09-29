@@ -6,11 +6,11 @@ package org.chipsalliance.rocket
 import chisel3._
 import chisel3.util.{Cat, log2Up, log2Ceil, log2Floor, Log2, Decoupled, Enum, Fill, Valid, Pipe}
 import freechips.rocketchip.util._
-import org.chipsalliance.rocket.Operands.ALU
+import org.chipsalliance.rocket.Operands.{ALU, DW}
 
 class MultiplierReq(dataBits: Int, tagBits: Int) extends Bundle {
   val fn = Bits(ALU.width.W)
-  val dw = Bits(SZ_DW.W)
+  val dw = Bits(DW.width.W)
   val in1 = Bits(dataBits.W)
   val in2 = Bits(dataBits.W)
   val tag = UInt(tagBits.W)
@@ -73,7 +73,7 @@ class MulDiv(cfg: MulDivParams, width: Int, nXpr: Int = 32) extends Module {
       (if (cfg.divUnroll != 0) divDecode else Nil) ++ (if (cfg.mulUnroll != 0) mulDecode else Nil)).map(_.asBool)
 
   require(w == 32 || w == 64)
-  def halfWidth(req: MultiplierReq) = (w > 32).B && req.dw === DW_32
+  def halfWidth(req: MultiplierReq) = (w > 32).B && req.dw === DW.N
 
   def sext(x: Bits, halfW: Bool, signed: Bool) = {
     val sign = signed && Mux(halfW, x(w/2-1), x(w-1))
@@ -195,7 +195,7 @@ class PipelinedMultiplier(width: Int, latency: Int, nXpr: Int = 32) extends Modu
     ALU.MULHSU -> List(Y, Y, N))
   val cmdHi :: lhsSigned :: rhsSigned :: Nil =
     DecodeLogic(in.bits.fn, List(X, X, X), decode).map(_.asBool)
-  val cmdHalf = (width > 32).B && in.bits.dw === DW_32
+  val cmdHalf = (width > 32).B && in.bits.dw === DW.N
 
   val lhs = Cat(lhsSigned && in.bits.in1(width-1), in.bits.in1).asSInt
   val rhs = Cat(rhsSigned && in.bits.in2(width-1), in.bits.in2).asSInt
