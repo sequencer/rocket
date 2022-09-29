@@ -41,12 +41,6 @@ trait ScalarOpConstants {
   def X = BitPat("b?")
   def N = BitPat("b0")
   def Y = BitPat("b1")
-
-  val SZ_DW = 1
-  def DW_X  = X
-  def DW_32 = false.B
-  def DW_64 = true.B
-  def DW_XPR = DW_64
 }
 
 trait MemoryOpConstants {
