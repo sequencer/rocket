@@ -449,7 +449,7 @@ class Rocket(tile: RocketTile)(implicit p: Parameters) extends CoreModule()(p)
     when (id_fence_next) { id_reg_fence := true }
     when (id_xcpt) { // pass PC down ALU writeback pipeline for badaddr
       ex_ctrl.alu_fn := Operands.ALU.ADD
-      ex_ctrl.alu_dw := DW_XPR
+      ex_ctrl.alu_dw := Operands.DW.XPR
       ex_ctrl.sel_alu1 := A1_RS1 // badaddr := instruction
       ex_ctrl.sel_alu2 := A2_ZERO
       when (id_xcpt1.asUInt.orR) { // badaddr := PC+2
