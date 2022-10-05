@@ -124,6 +124,11 @@ object rocket extends common.RocketModule with ScalafmtModule {
   }
 
   def tilelinkModule = Some(mytilelink)
+  def opcodesModule = opcodes
+}
+
+object opcodes extends common.Opcodes {
+  override def millSourcePath = os.pwd /  "dependencies" / "riscv-opcodes"
 }
 
 object diplomatic extends common.DiplomaticModule {
