@@ -133,16 +133,12 @@ abstract class CoreModule(implicit val p: Parameters) extends Module
 abstract class CoreBundle(implicit val p: Parameters) extends ParameterizedBundle()(p)
   with HasCoreParameters
 
-class CoreInterrupts(implicit p: Parameters) extends TileInterrupts()(p) {
-  val buserror = tileParams.beuAddr.map(a => Bool())
-}
-
 trait HasCoreIO extends HasTileParameters {
   implicit val p: Parameters
   val io = new CoreBundle()(p) {
     val hartid = UInt(hartIdLen.W).asInput
     val reset_vector = UInt(resetVectorLen.W).asInput
-    val interrupts = new CoreInterrupts().asInput
+    val interrupts = new CoreInterrupts(usingSupervisor, usingNMI, coreParams.nLocalInterrupts, resetVectorLen, tileParams.beuAddr).asInput
     val imem  = new FrontendIO
     val dmem = new HellaCacheIO
     val ptw = new DatapathPTWIO().flip
