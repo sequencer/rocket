@@ -77,6 +77,11 @@ object rocket extends common.RocketModule with ScalafmtModule { m =>
   def chisel3Module = Some(mychisel3)
   def chisel3PluginJar = T { Some(mychisel3.plugin.jar()) }
   def tilelinkModule = Some(mytilelink)
+  def opcodesModule = opcodes
+}
+
+object opcodes extends common.Opcodes {
+  override def millSourcePath = os.pwd /  "dependencies" / "riscv-opcodes"
 }
 
 object diplomatic extends common.DiplomaticModule { m =>
