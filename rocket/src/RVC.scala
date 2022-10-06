@@ -4,9 +4,6 @@ package org.chipsalliance.rocket
 
 import chisel3._
 import chisel3.util._
-import freechips.rocketchip.config.Parameters
-import org.chipsalliance.rockettile._
-import freechips.rocketchip.util._
 
 class ExpandedInstruction extends Bundle {
   val bits = UInt(32.W)
@@ -99,16 +96,16 @@ class RVCDecoder(x: UInt, xLen: Int) {
       def srai = srli | (1 << 30).U
       def andi = Cat(addiImm, rs1p, 7.U(3.W), rs1p, 0x13.U(7.W))
       def rtype = {
-        val funct = Seq(0.U, 4.U, 6.U, 7.U, 0.U, 0.U, 2.U, 3.U)(Cat(x(12), x(6,5)))
+        val funct = VecInit(Seq(0.U, 4.U, 6.U, 7.U, 0.U, 0.U, 2.U, 3.U))(Cat(x(12), x(6,5)))
         val sub = Mux(x(6,5) === 0.U, (1 << 30).U, 0.U)
         val opc = Mux(x(12), 0x3B.U(7.W), 0x33.U(7.W))
         Cat(rs2p, rs1p, funct, rs1p, opc) | sub
       }
-      inst(Seq(srli, srai, andi, rtype)(x(11,10)), rs1p, rs1p, rs2p)
+      inst(VecInit(Seq(srli, srai, andi, rtype))(x(11,10)), rs1p, rs1p, rs2p)
     }
     Seq(addi, jal, li, lui, arith, j, beqz, bnez)
   }
-  
+
   def q2 = {
     val load_opc = Mux(rd.orR, 0x03.U(7.W), 0x1F.U(7.W))
     def slli = inst(Cat(shamt, rd, 1.U(3.W), rd, 0x13.U(7.W)), rd, rd, rs2)
@@ -147,12 +144,12 @@ class RVCDecoder(x: UInt, xLen: Int) {
   def passthrough = inst(x)
 
   def decode = {
-    val s = q0 ++ q1 ++ q2 ++ q3
+    val s = VecInit(q0 ++ q1 ++ q2 ++ q3)
     s(Cat(x(1,0), x(15,13)))
   }
 }
 
-class RVCExpander(implicit val p: Parameters) extends Module with HasCoreParameters {
+class RVCExpander(usingCompressed: Boolean, xLen: Int) extends Module {
   val io = IO(new Bundle {
     val in = Input(UInt(32.W))
     val out = Output(new ExpandedInstruction)
@@ -161,9 +158,9 @@ class RVCExpander(implicit val p: Parameters) extends Module with HasCoreParamet
 
   if (usingCompressed) {
     io.rvc := io.in(1,0) =/= 3.U
-    io.out := new RVCDecoder(io.in, p(XLen)).decode
+    io.out := new RVCDecoder(io.in, xLen).decode
   } else {
     io.rvc := false.B
-    io.out := new RVCDecoder(io.in, p(XLen)).passthrough
+    io.out := new RVCDecoder(io.in, xLen).passthrough
   }
 }
