@@ -1,0 +1,17 @@
+pipeline {
+  agent any
+  stages {
+    stage('Prepare') {
+      steps {
+        sh 'make init'
+	sh 'make depatch'
+	sh 'make patch'
+      }
+    }
+    stage('Test') {
+      steps {
+        sh 'make test'
+      }
+    }
+  }
+}
