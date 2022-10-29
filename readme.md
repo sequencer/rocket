@@ -24,6 +24,6 @@ There will be two projects: `rocket` and `diplomatic`, `rocket` will depend on `
 Philosophy of this repository is **fast break and fast fix**.
 This repository always tracks remote developing branches, it may need some patches to work, `make patch` will append below in sequence:
 <!-- BEGIN-PATCH -->
-rocket-chip https://github.com/chipsalliance/rocket-chip/pull/2968  
-rocket-chip https://github.com/chipsalliance/rocket-chip/pull/3013  
+rocket-chip https://github.com/chipsalliance/rocket-chip/pull/2968.diff  
+rocket-chip https://github.com/chipsalliance/rocket-chip/pull/3013.diff  
 <!-- END-PATCH -->
