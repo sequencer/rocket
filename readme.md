@@ -26,4 +26,6 @@ This repository always tracks remote developing branches, it may need some patch
 <!-- BEGIN-PATCH -->
 rocket-chip https://github.com/chipsalliance/rocket-chip/pull/2968.diff  
 rocket-chip https://github.com/chipsalliance/rocket-chip/pull/3013.diff  
+rocket-chip https://github.com/chipsalliance/rocket-chip/pull/3066.diff  
+rocket-chip https://github.com/chipsalliance/rocket-chip/pull/3103.diff  
 <!-- END-PATCH -->
