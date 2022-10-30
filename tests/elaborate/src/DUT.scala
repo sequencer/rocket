@@ -1,12 +1,14 @@
 package rocket.tests
 
 import chisel3._
+import chisel3.experimental.ExtModule
+import chisel3.util.{HasBlackBoxInline, HasExtModuleInline}
 import freechips.rocketchip.devices.debug.Debug
 import freechips.rocketchip.devices.tilelink.{BootROM, BootROMLocated, MaskROM, MaskROMLocated}
 import freechips.rocketchip.diplomacy.LazyModule
 import freechips.rocketchip.subsystem._
 import freechips.rocketchip.system._
-import freechips.rocketchip.util.{AsyncResetReg, DontTouch}
+import freechips.rocketchip.util.{AsyncResetReg, DontTouch, PlusArgArtefacts}
 import org.chipsalliance.cde.config.Parameters
 import org.chipsalliance.rockettile.RocketTile
 

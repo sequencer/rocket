@@ -5,7 +5,7 @@ import circt.stage.{CIRCTTarget, CIRCTTargetAnnotation, ChiselStage, FirtoolOpti
 import firrtl.options.TargetDirAnnotation
 import firrtl.{AnnotationSeq, ChirrtlEmitter, EmitAllModulesAnnotation}
 import freechips.rocketchip.devices.tilelink.BootROMLocated
-import freechips.rocketchip.util.ClockGateModelFile
+import freechips.rocketchip.util.{ClockGateModelFile, PlusArgArtefacts}
 import mainargs._
 
 object Main {
@@ -14,7 +14,7 @@ object Main {
                  @arg(name = "dir") dir: String,
                  @arg(name = "bootrom_file") bootrom: String,
                  @arg(name = "eicg_file") eicgFile: String
-               ): Unit =
+               ): Unit = {
     (new ChiselStage).transform(AnnotationSeq(Seq(
       TargetDirAnnotation(dir),
       new ChiselGeneratorAnnotation(() => {
@@ -24,10 +24,13 @@ object Main {
         }))
       }),
       firrtl.passes.memlib.InferReadWriteAnnotation,
-      CIRCTTargetAnnotation(CIRCTTarget.SystemVerilog),
+      CIRCTTargetAnnotation(CIRCTTarget.Verilog),
       EmitAllModulesAnnotation(classOf[ChirrtlEmitter]),
       FirtoolOption("--disable-annotation-unknown")
     )))
+    // This is super dirty, need refactor
+    os.write(os.Path(dir) / "plusarg.h", PlusArgArtefacts.serialize_cHeader)
+  }
 
   def main(args: Array[String]): Unit = ParserForMethods(this).runOrExit(args)
 }

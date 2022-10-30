@@ -8,6 +8,8 @@
 #endif
 #include <fesvr/dtm.h>
 #include "remote_bitbang.h"
+#include "VTestHarness.h"
+#include "plusarg.h"
 #include "SimDTM.h"
 #include <iostream>
 #include <fcntl.h>
