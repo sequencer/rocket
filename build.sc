@@ -292,6 +292,7 @@ object tests extends Module {
       )
       PathRef(T.dest)
     }
+
     def rtls = T {
       os.read(elaborate().path / "filelist.f").split("\n").map(str =>
         try {
@@ -302,6 +303,7 @@ object tests extends Module {
         }
       ).filter(p => p.ext == "v" || p.ext == "sv").map(PathRef(_)).toSeq
     }
+
     def annos = T {
       os.walk(elaborate().path).filter(p => p.last.endsWith("anno.json")).map(PathRef(_))
     }
@@ -395,10 +397,287 @@ object tests extends Module {
       os.write(path, CMakeListsString())
       PathRef(T.dest)
     }
+
     def elf = T {
       os.proc("cmake", "-G", "Ninja", "-S", cmakefileLists().path, "-B", T.dest.toString).call()
       os.proc("ninja", "-C", T.dest.toString).call()
       PathRef(T.dest / "emulator")
     }
   }
+
+  object cases extends Module {
+    c =>
+    trait Suite extends Module {
+      def name: T[String]
+
+      def description: T[String]
+
+      def binaries: T[Seq[PathRef]]
+    }
+
+    object riscvtests extends Module {
+      trait Suite extends c.Suite {
+        def name = T {
+          millSourcePath.last
+        }
+
+        def description = T {
+          s"test suite ${name} from riscv-tests"
+        }
+
+        def binaries = T {
+          os.walk(untar().path).filter(p => p.last.startsWith(name())).filterNot(p => p.last.endsWith("dump")).map(PathRef(_))
+        }
+      }
+
+      def commit = T {
+        "047314c5b0525b86f7d5bb6ffe608f7a8b33ffdb"
+      }
+
+      def tgz = T.persistent {
+        Util.download(s"https://github.com/ZenithalHourlyRate/riscv-tests-release/releases/download/tag-${commit()}/riscv-tests.tgz")
+      }
+
+      def untar = T.persistent {
+        os.proc("tar", "xzf", tgz().path).call(T.dest)
+        PathRef(T.dest)
+      }
+
+      // These bucket are generated via
+      // os.walk(os.pwd).map(_.last).filterNot(_.endsWith("dump")).map(_.split('-').dropRight(1).mkString("-")).toSet.toSeq.sorted.foreach(println)
+      object `rv32mi-p` extends Suite
+
+      object `rv32mi-p-lh` extends Suite
+
+      object `rv32mi-p-lw` extends Suite
+
+      object `rv32mi-p-sh` extends Suite
+
+      object `rv32mi-p-sw` extends Suite
+
+      object `rv32si-p` extends Suite
+
+      object `rv32ua-p` extends Suite
+
+      object `rv32ua-v` extends Suite
+
+      object `rv32uc-p` extends Suite
+
+      object `rv32uc-v` extends Suite
+
+      object `rv32ud-p` extends Suite
+
+      object `rv32ud-v` extends Suite
+
+      object `rv32uf-p` extends Suite
+
+      object `rv32uf-v` extends Suite
+
+      object `rv32ui-p` extends Suite
+
+      object `rv32ui-v` extends Suite
+
+      object `rv32um-p` extends Suite
+
+      object `rv32um-v` extends Suite
+
+      object `rv32uzfh-p` extends Suite
+
+      object `rv32uzfh-v` extends Suite
+
+      object `rv64mi-p` extends Suite
+
+      object `rv64mi-p-ld` extends Suite
+
+      object `rv64mi-p-lh` extends Suite
+
+      object `rv64mi-p-lw` extends Suite
+
+      object `rv64mi-p-sd` extends Suite
+
+      object `rv64mi-p-sh` extends Suite
+
+      object `rv64mi-p-sw` extends Suite
+
+      object `rv64mzicbo-p` extends Suite
+
+      object `rv64si-p` extends Suite
+
+      object `rv64si-p-icache` extends Suite
+
+      object `rv64ssvnapot-p` extends Suite
+
+      object `rv64ua-p` extends Suite
+
+      object `rv64ua-v` extends Suite
+
+      object `rv64uc-p` extends Suite
+
+      object `rv64uc-v` extends Suite
+
+      object `rv64ud-p` extends Suite
+
+      object `rv64ud-v` extends Suite
+
+      object `rv64uf-p` extends Suite
+
+      object `rv64uf-v` extends Suite
+
+      object `rv64ui-p` extends Suite
+
+      object `rv64ui-v` extends Suite
+
+      object `rv64um-p` extends Suite
+
+      object `rv64um-v` extends Suite
+
+      object `rv64uzfh-p` extends Suite
+
+      object `rv64uzfh-v` extends Suite
+    }
+  }
+
+  object run extends Module {
+    m =>
+    trait RunableTest extends Module {
+      def elf: T[PathRef]
+
+      def testcases: T[Seq[PathRef]]
+
+      def run = T {
+        val processes = testcases().map { bin =>
+          os.proc(emulator.elf().path.toString, bin.path.toString).spawn(stdout = T.dest / s"${bin.path.last}.log", mergeErrIntoOut = true)
+        }
+        processes.foreach(_.join())
+        assert(processes.forall(_.exitCode() == 0))
+        PathRef(T.dest)
+      }
+    }
+
+    object rv64default extends Module {
+      trait RunableTest extends m.RunableTest {
+        def elf = T {
+          emulator.elf()
+        }
+      }
+
+      def run = T {
+        `rv64mi-p`.run()
+        `rv64mi-p-ld`.run()
+        `rv64mi-p-lh`.run()
+        `rv64mi-p-lw`.run()
+        `rv64mi-p-sd`.run()
+        `rv64mi-p-sh`.run()
+        `rv64mi-p-sw`.run()
+        `rv64mzicbo-p`.run()
+        `rv64si-p`.run()
+        `rv64si-p-icache`.run()
+        `rv64ssvnapot-p`.run()
+        `rv64ua-p`.run()
+        `rv64ua-v`.run()
+        `rv64uc-p`.run()
+        `rv64uc-v`.run()
+        `rv64ud-p`.run()
+        `rv64ud-v`.run()
+        `rv64uf-p`.run()
+        `rv64uf-v`.run()
+        `rv64ui-p`.run()
+        `rv64ui-v`.run()
+        `rv64um-p`.run()
+        `rv64um-v`.run()
+      }
+      object `rv64mi-p` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64mi-p`.binaries()
+      }
+
+      object `rv64mi-p-ld` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64mi-p-ld`.binaries()
+      }
+
+      object `rv64mi-p-lh` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64mi-p-lh`.binaries()
+      }
+
+      object `rv64mi-p-lw` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64mi-p-lw`.binaries()
+      }
+
+      object `rv64mi-p-sd` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64mi-p-sd`.binaries()
+      }
+
+      object `rv64mi-p-sh` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64mi-p-sh`.binaries()
+      }
+
+      object `rv64mi-p-sw` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64mi-p-sw`.binaries()
+      }
+
+      object `rv64mzicbo-p` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64mzicbo-p`.binaries()
+      }
+
+      object `rv64si-p` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64si-p`.binaries()
+      }
+
+      object `rv64si-p-icache` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64si-p-icache`.binaries()
+      }
+
+      object `rv64ssvnapot-p` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64ssvnapot-p`.binaries()
+      }
+
+      object `rv64ua-p` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64ua-p`.binaries()
+      }
+
+      object `rv64ua-v` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64ua-v`.binaries()
+      }
+
+      object `rv64uc-p` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64uc-p`.binaries()
+      }
+
+      object `rv64uc-v` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64uc-v`.binaries()
+      }
+
+      object `rv64ud-p` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64ud-p`.binaries()
+      }
+
+      object `rv64ud-v` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64ud-v`.binaries()
+      }
+
+      object `rv64uf-p` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64uf-p`.binaries()
+      }
+
+      object `rv64uf-v` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64uf-v`.binaries()
+      }
+
+      object `rv64ui-p` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64ui-p`.binaries()
+      }
+
+      object `rv64ui-v` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64ui-v`.binaries()
+      }
+
+      object `rv64um-p` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64um-p`.binaries()
+      }
+
+      object `rv64um-v` extends RunableTest {
+        def testcases = cases.riscvtests.`rv64um-v`.binaries()
+      }
+    }
+  }
+
 }
