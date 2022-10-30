@@ -569,10 +569,8 @@ object tests extends Module {
         `rv64mi-p-sd`.run()
         `rv64mi-p-sh`.run()
         `rv64mi-p-sw`.run()
-        `rv64mzicbo-p`.run()
         `rv64si-p`.run()
         `rv64si-p-icache`.run()
-        `rv64ssvnapot-p`.run()
         `rv64ua-p`.run()
         `rv64ua-v`.run()
         `rv64uc-p`.run()
@@ -581,8 +579,8 @@ object tests extends Module {
         `rv64ud-v`.run()
         `rv64uf-p`.run()
         `rv64uf-v`.run()
-        `rv64ui-p`.run()
-        `rv64ui-v`.run()
+        // https://github.com/riscv-software-src/riscv-tests/issues/419
+        // `rv64ui-v`.run()
         `rv64um-p`.run()
         `rv64um-v`.run()
       }

@@ -71,9 +71,6 @@ pipeline {
         stage('rv64uf-v') {
           sh 'mill -i tests.run.rv64default.rv64uf-v.run'
         }
-        stage('rv64ui-v') {
-          sh 'mill -i tests.run.rv64default.rv64ui-v.run'
-        }
         stage('rv64um-p') {
           sh 'mill -i tests.run.rv64default.rv64um-p.run'
         }
