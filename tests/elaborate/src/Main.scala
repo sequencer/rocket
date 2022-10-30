@@ -29,7 +29,7 @@ object Main {
       FirtoolOption("--disable-annotation-unknown")
     )))
     // This is super dirty, need refactor
-    os.write(os.Path(dir) / "plusarg.h", PlusArgArtefacts.serialize_cHeader)
+    os.write.over(os.Path(dir) / "plusarg.h", PlusArgArtefacts.serialize_cHeader)
   }
 
   def main(args: Array[String]): Unit = ParserForMethods(this).runOrExit(args)
