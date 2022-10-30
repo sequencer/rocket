@@ -162,101 +162,112 @@ object tests extends Module {
     )
 
     object bootrom extends Module {
-      def cSrcPath = T {
+      def cSrcString = T.input {
+        """#define DRAM_BASE 0x80000000
+          |
+          |.section .text.start, "ax", @progbits
+          |.globl _start
+          |_start:
+          |  csrwi 0x7c1, 0 // disable chicken bits
+          |  li s0, DRAM_BASE
+          |  csrr a0, mhartid
+          |  la a1, _dtb
+          |  jr s0
+          |
+          |.section .text.hang, "ax", @progbits
+          |.globl _hang
+          |_hang:
+          |  csrwi 0x7c1, 0 // disable chicken bits
+          |  csrr a0, mhartid
+          |  la a1, _dtb
+          |  csrwi mie, 0
+          |1:
+          |  wfi
+          |  j 1b
+          |
+          |.section .rodata.dtb, "a", @progbits
+          |.globl _dtb
+          |.align 5, 0
+          |_dtb:
+          |.ascii "DTB goes here"
+          |""".stripMargin
+      }
+
+      def cSrcPath = T.persistent {
         val path = T.dest / "bootrom.S"
-        os.write(path,
-          """#define DRAM_BASE 0x80000000
-            |
-            |.section .text.start, "ax", @progbits
-            |.globl _start
-            |_start:
-            |  csrwi 0x7c1, 0 // disable chicken bits
-            |  li s0, DRAM_BASE
-            |  csrr a0, mhartid
-            |  la a1, _dtb
-            |  jr s0
-            |
-            |.section .text.hang, "ax", @progbits
-            |.globl _hang
-            |_hang:
-            |  csrwi 0x7c1, 0 // disable chicken bits
-            |  csrr a0, mhartid
-            |  la a1, _dtb
-            |  csrwi mie, 0
-            |1:
-            |  wfi
-            |  j 1b
-            |
-            |.section .rodata.dtb, "a", @progbits
-            |.globl _dtb
-            |.align 5, 0
-            |_dtb:
-            |.ascii "DTB goes here"
-            |""".stripMargin)
+        os.write.over(path, cSrcString())
         PathRef(path)
       }
 
-      def linkScript = T {
+      def linkScriptString = T.input {
+        """SECTIONS
+          |{
+          |  ROM_BASE = 0x10000; /* ... but actually position independent */
+          |  . = ROM_BASE;
+          |  .text.start : { *(.text.start) }
+          |  . = ROM_BASE + 0x40;
+          |  .text.hang : { *(.text.hang) }
+          |  . = ROM_BASE + 0x80;
+          |  .rodata.dtb : { *(.rodata.dtb) }
+          |}
+          |""".stripMargin
+      }
+
+      def linkScriptPath = T.persistent {
         val path = T.dest / "bootrom.ld"
-        os.write(path,
-          """SECTIONS
-            |{
-            |  ROM_BASE = 0x10000; /* ... but actually position independent */
-            |  . = ROM_BASE;
-            |  .text.start : { *(.text.start) }
-            |  . = ROM_BASE + 0x40;
-            |  .text.hang : { *(.text.hang) }
-            |  . = ROM_BASE + 0x80;
-            |  .rodata.dtb : { *(.rodata.dtb) }
-            |}
-            |""".stripMargin
-        )
+        os.write.over(path, linkScriptString())
         PathRef(path)
       }
 
-      def elf = T {
+      def elf = T.persistent {
         val path = T.dest / "bootrom.elf"
-        os.proc(
+        mill.modules.Jvm.runSubprocess(Seq(
           "clang",
           "--target=riscv64", "-march=rv64gc",
           "-mno-relax",
           "-static",
           "-nostdlib",
           "-Wl,--no-gc-sections",
-          "-fuse-ld=lld", s"-T${linkScript().path}",
+          "-fuse-ld=lld", s"-T${linkScriptPath().path}",
           s"${cSrcPath().path}",
-          "-o", path
-        ).call(T.dest)
+          "-o", s"$path"),
+          Map[String, String](),
+          T.dest
+        )
         PathRef(path)
       }
 
-      def bin = T {
+      def bin = T.persistent {
         val path = T.dest / "bootrom.bin"
-        os.proc(
+        mill.modules.Jvm.runSubprocess(Seq(
           "llvm-objcopy",
           "-O", "binary",
           s"${elf().path}",
-          s"$path"
-        ).call(T.dest)
+          s"$path"),
+          Map[String, String](),
+          T.dest
+        )
         PathRef(path)
       }
 
-      def img = T {
+      def img = T.persistent {
         val path = T.dest / "bootrom.img"
-        os.proc(
+        mill.modules.Jvm.runSubprocess(Seq(
           "dd",
           s"if=${bin().path}",
           s"of=$path",
           "bs=128",
-          "count=1"
-        ).call(T.dest)
+          "count=1"),
+          Map[String, String](),
+          T.dest
+        )
         PathRef(path)
       }
     }
 
-    def eicgPath = T {
+    def eicgPath = T.persistent {
       val path = T.dest / "EICG_wrapper.v"
-      os.write(path,
+      os.write.over(path,
         """/* verilator lint_off UNOPTFLAT */
           |module EICG_wrapper(
           |  output out,
@@ -277,7 +288,7 @@ object tests extends Module {
       PathRef(path)
     }
 
-    def elaborate = T {
+    def elaborate = T.persistent {
       mill.modules.Jvm.runSubprocess(
         finalMainClass(),
         runClasspath().map(_.path),
@@ -293,7 +304,7 @@ object tests extends Module {
       PathRef(T.dest)
     }
 
-    def rtls = T {
+    def rtls = T.persistent {
       os.read(elaborate().path / "filelist.f").split("\n").map(str =>
         try {
           os.Path(str)
@@ -304,7 +315,7 @@ object tests extends Module {
       ).filter(p => p.ext == "v" || p.ext == "sv").map(PathRef(_)).toSeq
     }
 
-    def annos = T {
+    def annos = T.persistent {
       os.walk(elaborate().path).filter(p => p.last.endsWith("anno.json")).map(PathRef(_))
     }
   }
@@ -316,16 +327,21 @@ object tests extends Module {
 
       // ask make to cache file.
       def compile = T.persistent {
-        os.proc(millSourcePath / "configure", "--prefix", "/usr", "--without-boost", "--without-boost-asio", "--without-boost-regex").call(
-          T.ctx.dest, Map(
+        mill.modules.Jvm.runSubprocess(
+          Seq(millSourcePath / "configure",
+            "--prefix", "/usr",
+            "--without-boost",
+            "--without-boost-asio",
+            "--without-boost-regex"
+          ).map(_.toString),
+          Map(
             "CC" -> "clang",
             "CXX" -> "clang++",
             "AR" -> "llvm-ar",
             "RANLIB" -> "llvm-ranlib",
-            "LD" -> "lld",
-          )
-        )
-        os.proc("make", "-j", Runtime.getRuntime().availableProcessors()).call(T.ctx.dest)
+            "LD" -> "lld"
+          ), T.ctx.dest)
+        mill.modules.Jvm.runSubprocess(Seq("make", "-j", Runtime.getRuntime().availableProcessors()).map(_.toString), Map[String, String](), T.ctx.dest)
         T.ctx.dest
       }
     }
@@ -369,13 +385,14 @@ object tests extends Module {
          |${vsrcs().map(_.path).mkString("\n")}
          |  TOP_MODULE DUT
          |  PREFIX VTestHarness
+         |  THREADS ${Runtime.getRuntime().availableProcessors()}
          |  VERILATOR_ARGS ${verilatorArgs().mkString(" ")}
          |)
          |""".stripMargin
       // format: on
     }
 
-    def verilatorArgs = T {
+    def verilatorArgs = T.input {
       Seq(
         // format: off
         "-Wno-UNOPTTHREADS", "-Wno-STMTDLY", "-Wno-LATCH", "-Wno-WIDTH",
@@ -388,19 +405,19 @@ object tests extends Module {
       )
     }
 
-    def vsrcs = T {
+    def vsrcs = T.persistent {
       elaborate.rtls().filter(p => p.path.ext == "v" || p.path.ext == "sv")
     }
 
-    def cmakefileLists = T {
+    def cmakefileLists = T.persistent {
       val path = T.dest / "CMakeLists.txt"
-      os.write(path, CMakeListsString())
+      os.write.over(path, CMakeListsString())
       PathRef(T.dest)
     }
 
-    def elf = T {
-      os.proc("cmake", "-G", "Ninja", "-S", cmakefileLists().path, "-B", T.dest.toString).call()
-      os.proc("ninja", "-C", T.dest.toString).call()
+    def elf = T.persistent {
+      mill.modules.Jvm.runSubprocess(Seq("cmake", "-G", "Ninja", "-S", cmakefileLists().path, "-B", T.dest.toString).map(_.toString), Map[String, String](), T.dest)
+      mill.modules.Jvm.runSubprocess(Seq("ninja", "-C", T.dest).map(_.toString), Map[String, String](), T.dest)
       PathRef(T.dest / "emulator")
     }
   }
@@ -430,7 +447,7 @@ object tests extends Module {
         }
       }
 
-      def commit = T {
+      def commit = T.input {
         "047314c5b0525b86f7d5bb6ffe608f7a8b33ffdb"
       }
 
@@ -439,7 +456,7 @@ object tests extends Module {
       }
 
       def untar = T.persistent {
-        os.proc("tar", "xzf", tgz().path).call(T.dest)
+        mill.modules.Jvm.runSubprocess(Seq("tar", "xzf", tgz().path).map(_.toString), Map[String, String](), T.dest)
         PathRef(T.dest)
       }
 
@@ -545,12 +562,23 @@ object tests extends Module {
       def testcases: T[Seq[PathRef]]
 
       def run = T {
-        val processes = testcases().map { bin =>
-          os.proc(emulator.elf().path.toString, bin.path.toString).spawn(stdout = T.dest / s"${bin.path.last}.log", mergeErrIntoOut = true)
+        testcases().map { bin =>
+          val name = bin.path.last
+          val p = os.proc(emulator.elf().path, bin.path).call(stdout = T.dest / s"$name.running.log", mergeErrIntoOut = true)
+          PathRef(if(p.exitCode != 0) {
+            os.move(T.dest / s"$name.running.log", T.dest / s"$name.failed.log")
+            System.err.println(s"Test $name failed with exit code ${p.exitCode}")
+            T.dest / s"$name.failed.log"
+          } else {
+            os.move(T.dest / s"$name.running.log", T.dest / s"$name.passed.log")
+            T.dest / s"$name.passed.log"
+          })
         }
-        processes.foreach(_.join())
-        assert(processes.forall(_.exitCode() == 0))
-        PathRef(T.dest)
+      }
+
+      def report = T {
+        val failed = run().filter(_.path.last.endsWith("failed.log"))
+        assert(failed.isEmpty, s"tests failed in ${failed.map(_.path.last).mkString(", ")}")
       }
     }
 
@@ -584,6 +612,7 @@ object tests extends Module {
         `rv64um-p`.run()
         `rv64um-v`.run()
       }
+
       object `rv64mi-p` extends RunableTest {
         def testcases = cases.riscvtests.`rv64mi-p`.binaries()
       }
