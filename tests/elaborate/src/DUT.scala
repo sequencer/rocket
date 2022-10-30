@@ -10,7 +10,8 @@ import freechips.rocketchip.util.{AsyncResetReg, DontTouch}
 import org.chipsalliance.cde.config.Parameters
 import org.chipsalliance.rockettile.RocketTile
 
-class DUT()(implicit p: Parameters) extends Module {
+class DUT(p: Parameters) extends Module {
+  implicit val implicitP = p
   val io = IO(new Bundle {
     val success = Output(Bool())
   })
