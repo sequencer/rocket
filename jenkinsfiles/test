@@ -1,85 +1,116 @@
 pipeline {
   agent any
+  options {
+    skipDefaultCheckout(true)
+  }
   stages {
     stage('Prepare') {
       steps {
+        cleanWs()
+        checkout scm
         sh 'make init'
         sh 'make depatch'
         sh 'make patch'
       }
     }
-    stage('Elaborate Test Verilog') {
-      steps {
-        sh 'mill -i tests.elaborate.rtls'
-      }
-    }
     stage('Generate emulator') {
       steps {
-        sh 'mill -i tests.emulator.elf'
+        sh 'mill tests.emulator.elf'
       }
     }
-    stage('Test') {
-      parallel {
-        stage('rv64mi-p') {
-          sh 'mill -i tests.run.rv64default.rv64mi-p.run'
-        }
-        stage('rv64mi-p-ld') {
-          sh 'mill -i tests.run.rv64default.rv64mi-p-ld.run'
-        }
-        stage('rv64mi-p-lh') {
-          sh 'mill -i tests.run.rv64default.rv64mi-p-lh.run'
-        }
-        stage('rv64mi-p-lw') {
-          sh 'mill -i tests.run.rv64default.rv64mi-p-lw.run'
-        }
-        stage('rv64mi-p-sd') {
-          sh 'mill -i tests.run.rv64default.rv64mi-p-sd.run'
-        }
-        stage('rv64mi-p-sh') {
-          sh 'mill -i tests.run.rv64default.rv64mi-p-sh.run'
-        }
-        stage('rv64mi-p-sw') {
-          sh 'mill -i tests.run.rv64default.rv64mi-p-sw.run'
-        }
-        stage('rv64si-p') {
-          sh 'mill -i tests.run.rv64default.rv64si-p.run'
-        }
-        stage('rv64si-p-icache') {
-          sh 'mill -i tests.run.rv64default.rv64si-p-icache.run'
-        }
-        stage('rv64ua-p') {
-          sh 'mill -i tests.run.rv64default.rv64ua-p.run'
-        }
-        stage('rv64ua-v') {
-          sh 'mill -i tests.run.rv64default.rv64ua-v.run'
-        }
-        stage('rv64uc-p') {
-          sh 'mill -i tests.run.rv64default.rv64uc-p.run'
-        }
-        stage('rv64uc-v') {
-          sh 'mill -i tests.run.rv64default.rv64uc-v.run'
-        }
-        stage('rv64ud-p') {
-          sh 'mill -i tests.run.rv64default.rv64ud-p.run'
-        }
-        stage('rv64ud-v') {
-          sh 'mill -i tests.run.rv64default.rv64ud-v.run'
-        }
-        stage('rv64uf-p') {
-          sh 'mill -i tests.run.rv64default.rv64uf-p.run'
-        }
-        stage('rv64uf-v') {
-          sh 'mill -i tests.run.rv64default.rv64uf-v.run'
-        }
-        stage('rv64um-p') {
-          sh 'mill -i tests.run.rv64default.rv64um-p.run'
-        }
-        stage('rv64um-v') {
-          sh 'mill -i tests.run.rv64default.rv64um-v.run'
-        }
-      }
+    stage('rv64mi-p') {
       steps {
-        sh 'make test'
+        sh 'mill tests.run.rv64default.rv64mi-p.report'
+      }
+    }
+    stage('rv64mi-p-ld') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64mi-p-ld.report'
+      }
+    }
+    stage('rv64mi-p-lh') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64mi-p-lh.report'
+      }
+    }
+    stage('rv64mi-p-lw') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64mi-p-lw.report'
+      }
+    }
+    stage('rv64mi-p-sd') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64mi-p-sd.report'
+      }
+    }
+    stage('rv64mi-p-sh') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64mi-p-sh.report'
+      }
+    }
+    stage('rv64mi-p-sw') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64mi-p-sw.report'
+      }
+    }
+    stage('rv64si-p') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64si-p.report'
+      }
+    }
+    stage('rv64si-cache') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64si-p-icache.report'
+      }
+    }
+    stage('rv64ua-p') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64ua-p.report'
+      }
+    }
+    stage('rv64ua-v') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64ua-v.report'
+      }
+    }
+    stage('rv64uc-p') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64uc-p.report'
+      }
+    }
+    stage('rv64uc-v') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64uc-v.report'
+      }
+    }
+    stage('rv64ud-p') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64ud-p.report'
+      }
+    }
+    stage('rv64ud-v') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64ud-v.report'
+      }
+    }
+    stage('rv64uf-p') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64uf-p.report'
+      }
+    }
+    stage('rv64uf-v') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64uf-v.report'
+      }
+    }
+    stage('rv64um-p') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64um-p.report'
+      }
+    }
+    stage('rv64um-v') {
+      steps {
+        sh 'mill tests.run.rv64default.rv64um-v.report'
       }
     }
   }
