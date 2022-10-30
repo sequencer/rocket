@@ -277,7 +277,7 @@ object tests extends Module {
       PathRef(path)
     }
 
-    def rtls = T {
+    def elaborate = T {
       mill.modules.Jvm.runSubprocess(
         finalMainClass(),
         runClasspath().map(_.path),
@@ -290,16 +290,95 @@ object tests extends Module {
         ),
         workingDir = forkWorkingDir()
       )
-      os.read(T.dest / "filelist.f").split("\n").map(str =>
+      PathRef(T.dest)
+    }
+    def rtls = T {
+      os.read(elaborate().path / "filelist.f").split("\n").map(str =>
         try {
           os.Path(str)
         } catch {
           case e: IllegalArgumentException if e.getMessage.contains("is not an absolute path") =>
-            T.dest / str
+            elaborate().path / str
         }
-      ).filter(p => p.ext == "v" || p.ext == "sv").map(PathRef(_)) ++
-        // find annotation file
-        os.walk(T.dest).filter(p => p.last.endsWith("anno.json")).map(PathRef(_))
+      ).filter(p => p.ext == "v" || p.ext == "sv").map(PathRef(_)).toSeq
+    }
+    def annos = T {
+      os.walk(elaborate().path).filter(p => p.last.endsWith("anno.json")).map(PathRef(_))
+    }
+  }
+
+  object emulator extends Module {
+    def csrcDir = T {
+      PathRef(millSourcePath / "src")
+    }
+
+    def allCSourceFiles = T {
+      Lib.findSourceFiles(Seq(csrcDir()), Seq("S", "s", "c", "cpp", "cc")).map(PathRef(_))
+    }
+
+    def CMakeListsString = T {
+      // format: off
+      s"""cmake_minimum_required(VERSION 3.20)
+         |project(emulator)
+         |include_directories(${csrcDir().path})
+         |# plusarg is here
+         |include_directories(${elaborate.elaborate().path})
+         |link_directories(${spike.compile().toString})
+         |include_directories(${spike.compile().toString})
+         |include_directories(${spike.millSourcePath.toString})
+         |
+         |set(CMAKE_CXX_STANDARD 17)
+         |set(CMAKE_C_COMPILER "clang")
+         |set(CMAKE_CXX_COMPILER "clang++")
+         |set(CMAKE_CXX_FLAGS "$${CMAKE_CXX_FLAGS} -DVERILATOR -DTEST_HARNESS=VTestHarness")
+         |set(THREADS_PREFER_PTHREAD_FLAG ON)
+         |
+         |find_package(verilator)
+         |find_package(Threads)
+         |
+         |add_executable(emulator
+         |${allCSourceFiles().map(_.path).mkString("\n")}
+         |)
+         |
+         |target_link_libraries(emulator PRIVATE $${CMAKE_THREAD_LIBS_INIT})
+         |target_link_libraries(emulator PRIVATE fesvr)
+         |verilate(emulator
+         |  SOURCES
+         |${vsrcs().map(_.path).mkString("\n")}
+         |  TOP_MODULE DUT
+         |  PREFIX VTestHarness
+         |  VERILATOR_ARGS ${verilatorArgs().mkString(" ")}
+         |)
+         |""".stripMargin
+      // format: on
+    }
+
+    def verilatorArgs = T {
+      Seq(
+        // format: off
+        "-Wno-UNOPTTHREADS", "-Wno-STMTDLY", "-Wno-LATCH", "-Wno-WIDTH",
+        "--x-assign unique",
+        "+define+RANDOMIZE_GARBAGE_ASSIGN",
+        "--output-split 20000",
+        "--output-split-cfuncs 20000",
+        "--max-num-width 1048576"
+        // format: on
+      )
+    }
+
+    def vsrcs = T {
+      elaborate.rtls().filter(p => p.path.ext == "v" || p.path.ext == "sv")
+    }
+
+    def cmakefileLists = T {
+      val path = T.dest / "CMakeLists.txt"
+      os.write(path, CMakeListsString())
+      PathRef(T.dest)
+    }
+    def elf = T {
+      os.proc("cmake", "-G", "Ninja", "-S", cmakefileLists().path, "-B", T.dest.toString).call()
+      os.proc("ninja", "-C", T.dest.toString).call()
+      PathRef(T.dest / "emulator")
     }
   }
 }
