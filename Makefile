@@ -24,7 +24,7 @@ compile:
 	mill -i -j 0 __.compile
 
 test:
-	mill -i tests.run.rv64default.run
+	mill -i -j 0 tests.run.rv64default.run
 
 clean:
 	git clean -fd
