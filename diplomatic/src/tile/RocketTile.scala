@@ -89,19 +89,6 @@ class RocketTile private(
   val beuProperty = bus_error_unit.map(d => Map(
           "sifive,buserror" -> d.device.asProperty)).getOrElse(Nil)
 
-  val cpuDevice: SimpleDevice = new SimpleDevice("cpu", Seq("sifive,rocket0", "riscv")) {
-    override def parent = Some(ResourceAnchors.cpus)
-    override def describe(resources: ResourceBindings): Description = {
-      val Description(name, mapping) = super.describe(resources)
-      Description(name, mapping ++ cpuProperties ++ nextLevelCacheProperty
-                  ++ tileProperties ++ dtimProperty ++ itimProperty ++ beuProperty)
-    }
-  }
-
-  ResourceBinding {
-    Resource(cpuDevice, "reg").bind(ResourceAddress(staticIdForMetadataUseOnly))
-  }
-
   override lazy val module = new RocketTileModuleImp(this)
 
   override def makeMasterBoundaryBuffers(crossing: ClockCrossingType)(implicit p: Parameters) = crossing match {
