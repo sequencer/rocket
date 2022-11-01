@@ -13,14 +13,9 @@ pipeline {
         sh 'make patch'
       }
     }
-    stage('Generate emulator') {
-      steps {
-        sh 'mill tests.emulator.elf'
-      }
-    }
     stage('tests') {
       steps {
-        sh 'make test'
+        sh 'mill -j 0 tests.run.rv64default.report'
       }
     }
   }

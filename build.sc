@@ -365,6 +365,7 @@ object tests extends Module {
          |include_directories(${spike.compile().toString})
          |include_directories(${spike.millSourcePath.toString})
          |
+         |set(CMAKE_BUILD_TYPE Release)
          |set(CMAKE_CXX_STANDARD 17)
          |set(CMAKE_C_COMPILER "clang")
          |set(CMAKE_CXX_COMPILER "clang++")
@@ -385,7 +386,6 @@ object tests extends Module {
          |${vsrcs().map(_.path).mkString("\n")}
          |  TOP_MODULE DUT
          |  PREFIX VTestHarness
-         |  THREADS ${Runtime.getRuntime().availableProcessors()}
          |  VERILATOR_ARGS ${verilatorArgs().mkString(" ")}
          |)
          |""".stripMargin
@@ -416,7 +416,7 @@ object tests extends Module {
     }
 
     def elf = T.persistent {
-      mill.modules.Jvm.runSubprocess(Seq("cmake", "-G", "Ninja", "-S", cmakefileLists().path, "-B", T.dest.toString, "-DCMAKE_BUILD_TYPE=Release").map(_.toString), Map[String, String](), T.dest)
+      mill.modules.Jvm.runSubprocess(Seq("cmake", "-G", "Ninja", "-S", cmakefileLists().path, "-B", T.dest.toString).map(_.toString), Map[String, String](), T.dest)
       mill.modules.Jvm.runSubprocess(Seq("ninja", "-C", T.dest).map(_.toString), Map[String, String](), T.dest)
       PathRef(T.dest / "emulator")
     }
@@ -590,27 +590,31 @@ object tests extends Module {
       }
 
       def run = T {
-        `rv64mi-p`.run()
-        `rv64mi-p-ld`.run()
-        `rv64mi-p-lh`.run()
-        `rv64mi-p-lw`.run()
-        `rv64mi-p-sd`.run()
-        `rv64mi-p-sh`.run()
-        `rv64mi-p-sw`.run()
-        `rv64si-p`.run()
-        `rv64si-p-icache`.run()
-        `rv64ua-p`.run()
-        `rv64ua-v`.run()
-        `rv64uc-p`.run()
-        `rv64uc-v`.run()
-        `rv64ud-p`.run()
-        `rv64ud-v`.run()
-        `rv64uf-p`.run()
-        `rv64uf-v`.run()
+        (`rv64mi-p`.run() ++ 
+        `rv64mi-p-ld`.run() ++ 
+        `rv64mi-p-lh`.run() ++ 
+        `rv64mi-p-lw`.run() ++ 
+        `rv64mi-p-sd`.run() ++ 
+        `rv64mi-p-sh`.run() ++ 
+        `rv64mi-p-sw`.run() ++ 
+        `rv64si-p`.run() ++ 
+        `rv64si-p-icache`.run() ++ 
+        `rv64ua-p`.run() ++ 
+        `rv64ua-v`.run() ++ 
+        `rv64uc-p`.run() ++ 
+        `rv64uc-v`.run() ++ 
+        `rv64ud-p`.run() ++ 
+        `rv64ud-v`.run() ++ 
+        `rv64uf-p`.run() ++ 
+        `rv64uf-v`.run() ++ 
         // https://github.com/riscv-software-src/riscv-tests/issues/419
-        // `rv64ui-v`.run()
-        `rv64um-p`.run()
-        `rv64um-v`.run()
+        // `rv64ui-v`.run() ++ 
+        `rv64um-p`.run() ++ 
+        `rv64um-v`.run())
+      }
+      def report = T {
+        val failed = run().filter(_.path.last.endsWith("failed.log"))
+        assert(failed.isEmpty, s"tests failed in ${failed.map(_.path.last).mkString(", ")}")
       }
 
       object `rv64mi-p` extends RunableTest {
