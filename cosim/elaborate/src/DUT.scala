@@ -1,67 +1,82 @@
 package rocket.tests
 
 import chisel3._
-import chisel3.experimental.ExtModule
-import chisel3.util.{HasBlackBoxInline, HasExtModuleInline}
-import freechips.rocketchip.devices.debug.Debug
-import freechips.rocketchip.devices.tilelink.{BootROM, BootROMLocated, MaskROM, MaskROMLocated}
-import freechips.rocketchip.diplomacy.LazyModule
+import freechips.rocketchip.diplomacy.{AddressSet, BundleBridgeSource, InModuleBody, LazyModule, RegionType, SimpleLazyModule, TransferSizes}
+import freechips.rocketchip.interrupts.{IntSinkNode, IntSinkPortSimple, IntSourceNode, IntSourcePortSimple}
 import freechips.rocketchip.subsystem._
-import freechips.rocketchip.system._
-import freechips.rocketchip.util.{AsyncResetReg, DontTouch, PlusArgArtefacts}
+import freechips.rocketchip.tilelink.{TLManagerNode, TLSlaveParameters, TLSlavePortParameters}
 import org.chipsalliance.cde.config.Parameters
-import org.chipsalliance.rockettile.RocketTile
+import org.chipsalliance.rockettile.{NMI, PriorityMuxHartIdFromSeq, RocketTile, RocketTileParams, XLen}
 
 class DUT(p: Parameters) extends Module {
   implicit val implicitP = p
-  val io = IO(new Bundle {
-    val success = Output(Bool())
+  val tileParams = p(RocketTileParamsKey)
+  val ldut = LazyModule(new SimpleLazyModule {
+    implicit val implicitP = p
+    val rocketTile = LazyModule(new RocketTile(tileParams, RocketCrossingParams(), PriorityMuxHartIdFromSeq(Seq(tileParams))))
+    val masterNode = TLManagerNode(Seq(TLSlavePortParameters.v1(
+      Seq(TLSlaveParameters.v1(
+        address = List(AddressSet(0x80000000L, 0x7fffffffL)),
+        regionType = RegionType.UNCACHED,
+        supportsGet = TransferSizes(1, 64),
+        supportsAcquireT = TransferSizes(1, 64),
+        supportsAcquireB = TransferSizes(1, 64),
+        supportsPutPartial = TransferSizes(1, 64),
+        supportsPutFull = TransferSizes(1, 64),
+        fifoId = Some(0))),
+      beatBytes = 8,
+      endSinkId = 4,
+      minLatency = 1
+    )))
+    masterNode :=* rocketTile.masterNode
+    val memroy = InModuleBody {
+      masterNode.makeIOs()
+    }
+
+    val intNode = IntSourceNode(IntSourcePortSimple())
+    rocketTile.intInwardNode :=* intNode
+    val intIn = InModuleBody {
+      intNode.makeIOs()
+    }
+
+    val haltNode = IntSinkNode(IntSinkPortSimple())
+    haltNode :=* rocketTile.haltNode
+    val haltOut = InModuleBody {
+      haltNode.makeIOs()
+    }
+
+    val ceaseNode = IntSinkNode(IntSinkPortSimple())
+    ceaseNode :=* rocketTile.ceaseNode
+    val ceaseOut = InModuleBody {
+      ceaseNode.makeIOs()
+    }
+
+    val wfiNode = IntSinkNode(IntSinkPortSimple())
+    wfiNode :=* rocketTile.wfiNode
+    val wfiOut = InModuleBody {
+      wfiNode.makeIOs()
+    }
+
+
+    val resetVectorNode = BundleBridgeSource(() => UInt(32.W))
+    rocketTile.resetVectorNode := resetVectorNode
+    val resetVector = InModuleBody {
+      resetVectorNode.makeIO()
+    }
+
+    val hartidNode = BundleBridgeSource(() => UInt(4.W))
+    rocketTile.hartIdNode := hartidNode
+    InModuleBody {
+      hartidNode.bundle := 0.U
+    }
+
+    val nmiNode = BundleBridgeSource(Some(() => new NMI(32)))
+    rocketTile.nmiNode := nmiNode
+    val nmi = InModuleBody {
+      nmiNode.makeIO()
+    }
+
+
   })
-
-  val ldut = LazyModule(new ExampleRocketSystem)
   val dut = Module(ldut.module)
-
-  // Allow the debug ndreset to reset the dut, but not until the initial reset has completed
-  dut.reset := (reset.asBool | dut.debug.map { debug => AsyncResetReg(debug.ndreset) }.getOrElse(false.B)).asBool
-
-  dut.dontTouchPorts()
-  dut.tieOffInterrupts()
-  SimAXIMem.connectMem(ldut)
-  SimAXIMem.connectMMIO(ldut)
-  ldut.l2_frontend_bus_axi4.foreach(_.tieoff)
-  Debug.connectDebug(dut.debug, dut.resetctrl, dut.psd, clock, reset.asBool, io.success)
 }
-
-class ExampleRocketSystem(implicit p: Parameters) extends RocketSubsystem
-  with HasAsyncExtInterrupts
-  with CanHaveMasterAXI4MemPort
-  with CanHaveMasterAXI4MMIOPort
-  with CanHaveSlaveAXI4Port
-{
-  // optionally add ROM devices
-  // Note that setting BootROMLocated will override the reset_vector for all tiles
-  val bootROM  = p(BootROMLocated(location)).map { BootROM.attach(_, this, CBUS) }
-  val maskROMs = p(MaskROMLocated(location)).map { MaskROM.attach(_, this, CBUS) }
-
-  override lazy val module = new ExampleRocketSystemModuleImp(this)
-}
-
-trait HasRocketTiles extends HasTiles { this: BaseSubsystem =>
-  val rocketTiles = tiles.collect { case r: RocketTile => r }
-
-  def coreMonitorBundles = (rocketTiles map { t =>
-    t.module.core.rocketImpl.coreMonitorBundle
-  }).toList
-}
-
-class RocketSubsystem(implicit p: Parameters) extends BaseSubsystem with HasRocketTiles {
-  override lazy val module = new RocketSubsystemModuleImp(this)
-}
-
-class RocketSubsystemModuleImp[+L <: RocketSubsystem](_outer: L) extends BaseSubsystemModuleImp(_outer)
-  with HasTilesModuleImp
-
-class ExampleRocketSystemModuleImp[+L <: ExampleRocketSystem](_outer: L) extends RocketSubsystemModuleImp(_outer)
-  with HasRTCModuleImp
-  with HasExtInterruptsModuleImp
-  with DontTouch
