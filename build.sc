@@ -712,3 +712,179 @@ object tests extends Module {
   }
 
 }
+
+object cosim extends Module {
+  object elaborate extends ScalaModule with ScalafmtModule {
+    def scalaVersion = T {
+      v.scala
+    }
+
+    override def moduleDeps = Seq(diplomatic)
+
+    override def scalacOptions = T {
+      Seq("-Xsource:2.11", s"-Xplugin:${mychisel3.plugin.jar().path}")
+    }
+
+    override def ivyDeps = Agg(
+      v.mainargs
+    )
+
+    object bootrom extends Module {
+      def cSrcString = T.input {
+        """#define DRAM_BASE 0x80000000
+          |
+          |.section .text.start, "ax", @progbits
+          |.globl _start
+          |_start:
+          |  csrwi 0x7c1, 0 // disable chicken bits
+          |  li s0, DRAM_BASE
+          |  csrr a0, mhartid
+          |  la a1, _dtb
+          |  jr s0
+          |
+          |.section .text.hang, "ax", @progbits
+          |.globl _hang
+          |_hang:
+          |  csrwi 0x7c1, 0 // disable chicken bits
+          |  csrr a0, mhartid
+          |  la a1, _dtb
+          |  csrwi mie, 0
+          |1:
+          |  wfi
+          |  j 1b
+          |
+          |.section .rodata.dtb, "a", @progbits
+          |.globl _dtb
+          |.align 5, 0
+          |_dtb:
+          |.ascii "DTB goes here"
+          |""".stripMargin
+      }
+
+      def cSrcPath = T.persistent {
+        val path = T.dest / "bootrom.S"
+        os.write.over(path, cSrcString())
+        PathRef(path)
+      }
+
+      def linkScriptString = T.input {
+        """SECTIONS
+          |{
+          |  ROM_BASE = 0x10000; /* ... but actually position independent */
+          |  . = ROM_BASE;
+          |  .text.start : { *(.text.start) }
+          |  . = ROM_BASE + 0x40;
+          |  .text.hang : { *(.text.hang) }
+          |  . = ROM_BASE + 0x80;
+          |  .rodata.dtb : { *(.rodata.dtb) }
+          |}
+          |""".stripMargin
+      }
+
+      def linkScriptPath = T.persistent {
+        val path = T.dest / "bootrom.ld"
+        os.write.over(path, linkScriptString())
+        PathRef(path)
+      }
+
+      def elf = T.persistent {
+        val path = T.dest / "bootrom.elf"
+        mill.modules.Jvm.runSubprocess(Seq(
+          "clang",
+          "--target=riscv64", "-march=rv64gc",
+          "-mno-relax",
+          "-static",
+          "-nostdlib",
+          "-Wl,--no-gc-sections",
+          "-fuse-ld=lld", s"-T${linkScriptPath().path}",
+          s"${cSrcPath().path}",
+          "-o", s"$path"),
+          Map[String, String](),
+          T.dest
+        )
+        PathRef(path)
+      }
+
+      def bin = T.persistent {
+        val path = T.dest / "bootrom.bin"
+        mill.modules.Jvm.runSubprocess(Seq(
+          "llvm-objcopy",
+          "-O", "binary",
+          s"${elf().path}",
+          s"$path"),
+          Map[String, String](),
+          T.dest
+        )
+        PathRef(path)
+      }
+
+      def img = T.persistent {
+        val path = T.dest / "bootrom.img"
+        mill.modules.Jvm.runSubprocess(Seq(
+          "dd",
+          s"if=${bin().path}",
+          s"of=$path",
+          "bs=128",
+          "count=1"),
+          Map[String, String](),
+          T.dest
+        )
+        PathRef(path)
+      }
+    }
+
+    def eicgPath = T.persistent {
+      val path = T.dest / "EICG_wrapper.v"
+      os.write.over(path,
+        """/* verilator lint_off UNOPTFLAT */
+          |module EICG_wrapper(
+          |  output out,
+          |  input en,
+          |  input test_en,
+          |  input in
+          |);
+          |  reg en_latched /*verilator clock_enable*/;
+          |  always @(*) begin
+          |     if (!in) begin
+          |        en_latched = en || test_en;
+          |     end
+          |  end
+          |  assign out = en_latched && in;
+          |endmodule
+          |""".stripMargin
+      )
+      PathRef(path)
+    }
+
+    def elaborate = T.persistent {
+      mill.modules.Jvm.runSubprocess(
+        finalMainClass(),
+        runClasspath().map(_.path),
+        forkArgs(),
+        forkEnv(),
+        Seq(
+          "--dir", T.dest.toString,
+          "--bootrom_file", bootrom.img().path.toString,
+          "--eicg_file", eicgPath().path.toString,
+        ),
+        workingDir = forkWorkingDir()
+      )
+      PathRef(T.dest)
+    }
+
+    def rtls = T.persistent {
+      os.read(elaborate().path / "filelist.f").split("\n").map(str =>
+        try {
+          os.Path(str)
+        } catch {
+          case e: IllegalArgumentException if e.getMessage.contains("is not an absolute path") =>
+            elaborate().path / str
+        }
+      ).filter(p => p.ext == "v" || p.ext == "sv").map(PathRef(_)).toSeq
+    }
+
+    def annos = T.persistent {
+      os.walk(elaborate().path).filter(p => p.last.endsWith("anno.json")).map(PathRef(_))
+    }
+  }
+}
