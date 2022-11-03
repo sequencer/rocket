@@ -6,7 +6,7 @@ import freechips.rocketchip.interrupts.{IntSinkNode, IntSinkPortSimple, IntSourc
 import freechips.rocketchip.subsystem._
 import freechips.rocketchip.tilelink.{TLManagerNode, TLSlaveParameters, TLSlavePortParameters}
 import org.chipsalliance.cde.config.Parameters
-import org.chipsalliance.rockettile.{NMI, PriorityMuxHartIdFromSeq, RocketTile, RocketTileParams, XLen}
+import org.chipsalliance.rockettile.{NMI, PriorityMuxHartIdFromSeq, RocketTile}
 
 class DUT(p: Parameters) extends Module {
   implicit val implicitP = p
@@ -23,6 +23,8 @@ class DUT(p: Parameters) extends Module {
         supportsAcquireB = TransferSizes(1, 64),
         supportsPutPartial = TransferSizes(1, 64),
         supportsPutFull = TransferSizes(1, 64),
+        supportsLogical = TransferSizes(1, 64),
+        supportsArithmetic = TransferSizes(1, 64),
         fifoId = Some(0))),
       beatBytes = 8,
       endSinkId = 4,
@@ -56,27 +58,37 @@ class DUT(p: Parameters) extends Module {
     val wfiOut = InModuleBody {
       wfiNode.makeIOs()
     }
-
-
     val resetVectorNode = BundleBridgeSource(() => UInt(32.W))
     rocketTile.resetVectorNode := resetVectorNode
     val resetVector = InModuleBody {
       resetVectorNode.makeIO()
     }
-
     val hartidNode = BundleBridgeSource(() => UInt(4.W))
     rocketTile.hartIdNode := hartidNode
     InModuleBody {
       hartidNode.bundle := 0.U
     }
-
     val nmiNode = BundleBridgeSource(Some(() => new NMI(32)))
     rocketTile.nmiNode := nmiNode
     val nmi = InModuleBody {
       nmiNode.makeIO()
     }
-
-
   })
-  val dut = Module(ldut.module)
+  chisel3.experimental.DataMirror.fullModulePorts(
+    // instantiate the LazyModule
+    Module(ldut.module)
+  ).filterNot(_._2.isInstanceOf[Aggregate]).foreach { case (name, ele) =>
+    if (!(name == "clock" || name == "reset")) {
+      chisel3.experimental.DataMirror.directionOf(ele) match {
+        case ActualDirection.Output =>
+          val io = IO(Output(chiselTypeOf(ele))).suggestName(name)
+          println(s"output $name")
+          io := ele
+        case ActualDirection.Input =>
+          val io = IO(Input(chiselTypeOf(ele))).suggestName(name)
+          println(s"input $name")
+          ele := io
+      }
+    }
+  }
 }
