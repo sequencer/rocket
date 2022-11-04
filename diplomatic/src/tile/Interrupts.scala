@@ -3,27 +3,11 @@
 package org.chipsalliance.rockettile
 
 import Chisel._
-
 import freechips.rocketchip.config.Parameters
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.interrupts._
 import freechips.rocketchip.util._
-
-class NMI(val w: Int) extends Bundle {
-  val rnmi = Bool()
-  val rnmi_interrupt_vector = UInt(w.W)
-  val rnmi_exception_vector = UInt(w.W)
-}
-
-class TileInterrupts(implicit p: Parameters) extends CoreBundle()(p) {
-  val debug = Bool()
-  val mtip = Bool()
-  val msip = Bool()
-  val meip = Bool()
-  val seip = usingSupervisor.option(Bool())
-  val lip = Vec(coreParams.nLocalInterrupts, Bool())
-  val nmi = usingNMI.option(new NMI(resetVectorLen))
-}
+import org.chipsalliance.rocket.CoreInterrupts
 
 // Use diplomatic interrupts to external interrupts from the subsystem into the tile
 trait SinksExternalInterrupts { this: BaseTile =>
@@ -67,7 +51,7 @@ trait SinksExternalInterrupts { this: BaseTile =>
   }
 
   // go from flat diplomatic Interrupts to bundled TileInterrupts
-  def decodeCoreInterrupts(core: TileInterrupts): Unit = {
+  def decodeCoreInterrupts(core: CoreInterrupts): Unit = {
     val async_ips = Seq(core.debug)
     val periph_ips = Seq(
       core.msip,

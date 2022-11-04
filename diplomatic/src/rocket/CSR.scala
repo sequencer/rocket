@@ -241,7 +241,7 @@ class CSRDecodeIO(implicit p: Parameters) extends CoreBundle {
 class CSRFileIO(implicit p: Parameters) extends CoreBundle
     with HasCoreParameters {
   val ungated_clock = Input(Clock())
-  val interrupts = Input(new CoreInterrupts())
+  val interrupts = Input(new CoreInterrupts(usingSupervisor, usingNMI, coreParams.nLocalInterrupts, resetVectorLen, tileParams.beuAddr))
   val hartid = Input(UInt(hartIdLen.W))
   val rw = new Bundle {
     val addr = Input(UInt(CSR.ADDRSZ.W))
