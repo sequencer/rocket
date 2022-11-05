@@ -5,7 +5,15 @@ import mill.scalalib.scalafmt._
 import mill.modules.Util
 import mill.define.{Sources, TaskModule}
 import coursier.maven.MavenRepository
-
+import $file.dependencies.cde.build
+import $file.dependencies.`berkeley-hardfloat`.build
+import $file.dependencies.`rocket-chip`.common
+import $file.dependencies.chisel3.build
+import $file.dependencies.firrtl.build
+import $file.dependencies.treadle.build
+import $file.dependencies.chiseltest.build
+import $file.dependencies.tilelink.common
+import $file.common
 object v {
   val scala = "2.12.16"
   val chisel3 = ivy"edu.berkeley.cs::chisel3:3.6-SNAPSHOT"
@@ -917,7 +925,7 @@ object cosim extends Module {
          |target_include_directories(${topName} PRIVATE ${(spike.millSourcePath / "riscv").toString})
          |target_include_directories(${topName} PRIVATE ${(spike.millSourcePath / "fesvr").toString})
          |target_include_directories(${topName} PRIVATE ${(spike.millSourcePath / "softfloat").toString})
-         |target_include_directories(${topName} PRIVATE ${spike.compile().path.toString})
+         |target_include_directories(${topName} PRIVATE ${spike.compile().toString})
          |
          |target_include_directories(${topName} PUBLIC ${csources().path.toString})
          |
