@@ -5,15 +5,6 @@ import mill.scalalib.scalafmt._
 import mill.modules.Util
 import mill.define.{Sources, TaskModule}
 import coursier.maven.MavenRepository
-import $file.dependencies.cde.build
-import $file.dependencies.`berkeley-hardfloat`.build
-import $file.dependencies.`rocket-chip`.common
-import $file.dependencies.chisel3.build
-import $file.dependencies.firrtl.build
-import $file.dependencies.treadle.build
-import $file.dependencies.chiseltest.build
-import $file.dependencies.tilelink.common
-import $file.common
 
 object v {
   val scala = "2.12.16"
@@ -873,4 +864,106 @@ object cosim extends Module {
     }
   }
   /** build emulator */
+  object emulator extends Module {
+
+    def csources = T.source { millSourcePath / "src" }
+    def csrcDir = T {
+      PathRef(millSourcePath / "src")
+    }
+    def vsrcs = T.persistent {
+      elaborate.rtls().filter(p => p.path.ext == "v" || p.path.ext == "sv")
+    }
+
+    def allCSourceFiles = T {
+      Lib.findSourceFiles(Seq(csrcDir()), Seq("S", "s", "c", "cpp", "cc")).map(PathRef(_))
+    }
+    /** todo: has skipped verilator config process here*/
+    val topName = "emulator"
+    def CMakeListsString = T {
+      // format: off
+      s"""cmake_minimum_required(VERSION 3.20)
+         |project(emulator)
+         |FetchContent_Declare(args GIT_REPOSITORY https://github.com/Taywee/args GIT_TAG 6.4.0)
+         |FetchContent_Declare(glog GIT_REPOSITORY https://github.com/google/glog GIT_TAG v0.6.0)
+         |FetchContent_Declare(fmt GIT_REPOSITORY https://github.com/fmtlib/fmt GIT_TAG 9.1.0)
+         |FetchContent_MakeAvailable(args glog fmt)
+         |include_directories(${csrcDir().path})
+         |# plusarg is here
+         |include_directories(${elaborate.elaborate().path})
+         |link_directories(${spike.compile().toString})
+         |include_directories(${spike.compile().toString})
+         |include_directories(${spike.millSourcePath.toString})
+         |
+         |set(CMAKE_BUILD_TYPE Release)
+         |set(CMAKE_CXX_STANDARD 17)
+         |set(CMAKE_C_COMPILER "clang")
+         |set(CMAKE_CXX_COMPILER "clang++")
+         |set(CMAKE_CXX_FLAGS "$${CMAKE_CXX_FLAGS} -DVERILATOR -DTEST_HARNESS=VTestHarness")
+         |set(THREADS_PREFER_PTHREAD_FLAG ON)
+         |
+         |find_package(verilator)
+         |set(CMAKE_CXX_STANDARD 17)
+         |set(CMAKE_CXX_COMPILER_ID "clang")
+         |set(CMAKE_C_COMPILER "clang")
+         |set(CMAKE_CXX_COMPILER "clang++")
+         |
+         |find_package(Threads)
+         |set(THREADS_PREFER_PTHREAD_FLAG ON)
+         |
+         |add_executable(${topName}
+         |${allCSourceFiles().map(_.path).mkString("\n")}
+         |)
+         |
+         |target_include_directories(${topName} PRIVATE ${(spike.millSourcePath / "riscv").toString})
+         |target_include_directories(${topName} PRIVATE ${(spike.millSourcePath / "fesvr").toString})
+         |target_include_directories(${topName} PRIVATE ${(spike.millSourcePath / "softfloat").toString})
+         |target_include_directories(${topName} PRIVATE ${spike.compile().path.toString})
+         |
+         |target_include_directories(${topName} PUBLIC ${csources().path.toString})
+         |
+         |target_link_libraries(${topName} PRIVATE $${CMAKE_THREAD_LIBS_INIT})
+         |target_link_libraries(${topName} PUBLIC $${CMAKE_THREAD_LIBS_INIT})
+         |target_link_libraries(${topName} PUBLIC riscv fmt glog args)
+         |verilate(${topName}
+         |  SOURCES
+         |${vsrcs().map(_.path).mkString("\n")}
+         |  TOP_MODULE DUT
+         |  PREFIX VTestHarness
+         |  OPT_FAST
+         |  THREADS 8
+         |  VERILATOR_ARGS ${verilatorArgs().mkString(" ")}
+         |)
+         |""".stripMargin
+      // format: on
+    }
+
+    def verilatorArgs = T.input {
+      Seq(
+        // format: off
+        "-Wno-UNOPTTHREADS", "-Wno-STMTDLY", "-Wno-LATCH", "-Wno-WIDTH",
+        "--x-assign unique",
+        "+define+RANDOMIZE_GARBAGE_ASSIGN",
+        "--output-split 20000",
+        "--output-split-cfuncs 20000",
+        "--max-num-width 1048576",
+        "--vpi"
+        // format: on
+      )
+    }
+
+    def cmakefileLists = T.persistent {
+      val path = T.dest / "CMakeLists.txt"
+      os.write.over(path, CMakeListsString())
+      T.log.info(s"CMake project generated in $path,\nverilating...")
+      PathRef(T.dest)
+    }
+    /** return emulator PathRef */
+    def elf = T.persistent {
+      mill.modules.Jvm.runSubprocess(Seq("cmake", "-G", "Ninja", "-S", cmakefileLists().path, "-B", T.dest.toString).map(_.toString), Map[String, String](), T.dest)
+      T.log.info("compile rtl to emulator...")
+      mill.modules.Jvm.runSubprocess(Seq("ninja", "-C", T.dest).map(_.toString), Map[String, String](), T.dest)
+      T.log.info(s"verilated exe generated: ${T.dest / s"$topName"}")
+      PathRef(T.dest / s"$topName")
+    }
+  }
 }
