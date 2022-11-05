@@ -319,7 +319,7 @@ object tests extends Module {
       os.walk(elaborate().path).filter(p => p.last.endsWith("anno.json")).map(PathRef(_))
     }
   }
-
+  /** build emulator */
   object emulator extends Module {
 
     object spike extends Module {
@@ -414,14 +414,14 @@ object tests extends Module {
       os.write.over(path, CMakeListsString())
       PathRef(T.dest)
     }
-
+    /** return emulator PathRef */
     def elf = T.persistent {
       mill.modules.Jvm.runSubprocess(Seq("cmake", "-G", "Ninja", "-S", cmakefileLists().path, "-B", T.dest.toString).map(_.toString), Map[String, String](), T.dest)
       mill.modules.Jvm.runSubprocess(Seq("ninja", "-C", T.dest).map(_.toString), Map[String, String](), T.dest)
       PathRef(T.dest / "emulator")
     }
   }
-
+  /** Deal with riscv-test cases */
   object cases extends Module {
     c =>
     trait Suite extends Module {
@@ -557,10 +557,11 @@ object tests extends Module {
   object run extends Module {
     m =>
     trait RunableTest extends Module {
+      /** emulator path */
       def elf: T[PathRef]
-
+      /** test bin path */
       def testcases: T[Seq[PathRef]]
-
+      /** run test implementation */
       def run = T {
         testcases().map { bin =>
           val name = bin.path.last
@@ -581,7 +582,10 @@ object tests extends Module {
         assert(failed.isEmpty, s"tests failed in ${failed.map(_.path.last).mkString(", ")}")
       }
     }
-
+    /** rv64 test bundle
+      *
+      * run: run all the test
+      */
     object rv64default extends Module {
       trait RunableTest extends m.RunableTest {
         def elf = T {
@@ -756,6 +760,108 @@ object cosim extends Module {
 
     def annos = T.persistent {
       os.walk(elaborate().path).filter(p => p.last.endsWith("anno.json")).map(PathRef(_))
+    }
+  }
+  /** build emulator */
+  object emulator extends Module {
+
+    object spike extends Module {
+      override def millSourcePath = os.pwd / "dependencies" / "riscv-isa-sim"
+
+      // ask make to cache file.
+      def compile = T.persistent {
+        mill.modules.Jvm.runSubprocess(
+          Seq(millSourcePath / "configure",
+            "--prefix", "/usr",
+            "--without-boost",
+            "--without-boost-asio",
+            "--without-boost-regex"
+          ).map(_.toString),
+          Map(
+            "CC" -> "clang",
+            "CXX" -> "clang++",
+            "AR" -> "llvm-ar",
+            "RANLIB" -> "llvm-ranlib",
+            "LD" -> "lld"
+          ), T.ctx.dest)
+        mill.modules.Jvm.runSubprocess(Seq("make", "-j", Runtime.getRuntime().availableProcessors()).map(_.toString), Map[String, String](), T.ctx.dest)
+        T.ctx.dest
+      }
+    }
+
+    def csrcDir = T {
+      PathRef(millSourcePath / "src")
+    }
+
+    def allCSourceFiles = T {
+      Lib.findSourceFiles(Seq(csrcDir()), Seq("S", "s", "c", "cpp", "cc")).map(PathRef(_))
+    }
+
+    def CMakeListsString = T {
+      // format: off
+      s"""cmake_minimum_required(VERSION 3.20)
+         |project(emulator)
+         |include_directories(${csrcDir().path})
+         |# plusarg is here
+         |include_directories(${elaborate.elaborate().path})
+         |link_directories(${spike.compile().toString})
+         |include_directories(${spike.compile().toString})
+         |include_directories(${spike.millSourcePath.toString})
+         |
+         |set(CMAKE_BUILD_TYPE Release)
+         |set(CMAKE_CXX_STANDARD 17)
+         |set(CMAKE_C_COMPILER "clang")
+         |set(CMAKE_CXX_COMPILER "clang++")
+         |set(CMAKE_CXX_FLAGS "$${CMAKE_CXX_FLAGS} -DVERILATOR -DTEST_HARNESS=VTestHarness")
+         |set(THREADS_PREFER_PTHREAD_FLAG ON)
+         |
+         |find_package(verilator)
+         |find_package(Threads)
+         |
+         |add_executable(emulator
+         |${allCSourceFiles().map(_.path).mkString("\n")}
+         |)
+         |
+         |target_link_libraries(emulator PRIVATE $${CMAKE_THREAD_LIBS_INIT})
+         |target_link_libraries(emulator PRIVATE fesvr)
+         |verilate(emulator
+         |  SOURCES
+         |${vsrcs().map(_.path).mkString("\n")}
+         |  TOP_MODULE DUT
+         |  PREFIX VTestHarness
+         |  VERILATOR_ARGS ${verilatorArgs().mkString(" ")}
+         |)
+         |""".stripMargin
+      // format: on
+    }
+
+    def verilatorArgs = T.input {
+      Seq(
+        // format: off
+        "-Wno-UNOPTTHREADS", "-Wno-STMTDLY", "-Wno-LATCH", "-Wno-WIDTH",
+        "--x-assign unique",
+        "+define+RANDOMIZE_GARBAGE_ASSIGN",
+        "--output-split 20000",
+        "--output-split-cfuncs 20000",
+        "--max-num-width 1048576"
+        // format: on
+      )
+    }
+
+    def vsrcs = T.persistent {
+      elaborate.rtls().filter(p => p.path.ext == "v" || p.path.ext == "sv")
+    }
+
+    def cmakefileLists = T.persistent {
+      val path = T.dest / "CMakeLists.txt"
+      os.write.over(path, CMakeListsString())
+      PathRef(T.dest)
+    }
+    /** return emulator PathRef */
+    def elf = T.persistent {
+      mill.modules.Jvm.runSubprocess(Seq("cmake", "-G", "Ninja", "-S", cmakefileLists().path, "-B", T.dest.toString).map(_.toString), Map[String, String](), T.dest)
+      mill.modules.Jvm.runSubprocess(Seq("ninja", "-C", T.dest).map(_.toString), Map[String, String](), T.dest)
+      PathRef(T.dest / "emulator")
     }
   }
 }
