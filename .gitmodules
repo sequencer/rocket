@@ -28,3 +28,9 @@
 [submodule "dependencies/riscv-pk"]
 	path = dependencies/riscv-pk
 	url = git@github.com:riscv-software-src/riscv-pk
+[submodule "dependencies/musl"]
+	path = dependencies/musl
+	url = git@github.com:bminor/musl.git
+[submodule "dependencies/llvm-project"]
+	path = dependencies/llvm-project
+	url = git@github.com:llvm/llvm-project.git
