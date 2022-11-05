@@ -3,7 +3,7 @@ import mill.scalalib._
 import mill.scalalib.publish._
 import mill.scalalib.scalafmt._
 import mill.modules.Util
-import mill.define.Sources
+import mill.define.{Sources, TaskModule}
 import coursier.maven.MavenRepository
 import $file.dependencies.cde.build
 import $file.dependencies.`berkeley-hardfloat`.build
@@ -19,6 +19,8 @@ object v {
   val scala = "2.12.16"
   val chisel3 = ivy"edu.berkeley.cs::chisel3:3.6-SNAPSHOT"
   val chisel3Plugin = ivy"edu.berkeley.cs::chisel3-plugin:3.6-SNAPSHOT"
+  val chiseltest = ivy"edu.berkeley.cs::chiseltest:3.6-SNAPSHOT"
+  val utest = ivy"com.lihaoyi::utest:latest.integration"
   val macroParadise = ivy"org.scalamacros:::paradise:2.1.1"
   val mainargs = ivy"com.lihaoyi::mainargs:0.3.0"
 }
@@ -111,6 +113,93 @@ object mytilelink extends dependencies.tilelink.common.TileLinkModule {
   }
 }
 
+object compilerrt extends Module {
+  override def millSourcePath = os.pwd / "dependencies" / "llvm-project" / "compiler-rt"
+  // ask make to cache file.
+  def compile = T.persistent {
+    os.proc("cmake", "-S", millSourcePath,
+      "-DCOMPILER_RT_BUILD_LIBFUZZER=OFF",
+      "-DCOMPILER_RT_BUILD_SANITIZERS=OFF",
+      "-DCOMPILER_RT_BUILD_PROFILE=OFF",
+      "-DCOMPILER_RT_BUILD_MEMPROF=OFF",
+      "-DCOMPILER_RT_BUILD_ORC=OFF",
+      "-DCOMPILER_RT_BUILD_BUILTINS=ON",
+      "-DCOMPILER_RT_BAREMETAL_BUILD=ON",
+      "-DCOMPILER_RT_INCLUDE_TESTS=OFF",
+      "-DCOMPILER_RT_HAS_FPIC_FLAG=OFF",
+      "-DCOMPILER_RT_DEFAULT_TARGET_ONLY=On",
+      "-DCOMPILER_RT_OS_DIR=riscv64",
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DCMAKE_SYSTEM_NAME=Generic",
+      "-DCMAKE_SYSTEM_PROCESSOR=riscv64",
+      "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
+      "-DCMAKE_SIZEOF_VOID_P=8",
+      "-DCMAKE_ASM_COMPILER_TARGET=riscv64-none-elf",
+      "-DCMAKE_C_COMPILER_TARGET=riscv64-none-elf",
+      "-DCMAKE_C_COMPILER_WORKS=ON",
+      "-DCMAKE_CXX_COMPILER_WORKS=ON",
+      "-DCMAKE_C_COMPILER=clang",
+      "-DCMAKE_CXX_COMPILER=clang++",
+      "-DCMAKE_C_FLAGS=-nodefaultlibs -fno-exceptions -mno-relax -Wno-macro-redefined -fPIC",
+      "-DCMAKE_INSTALL_PREFIX=/usr",
+      "-Wno-dev",
+    ).call(T.ctx.dest)
+    os.proc("make", "-j", Runtime.getRuntime().availableProcessors()).call(T.ctx.dest)
+    PathRef(T.ctx.dest)
+  }
+}
+/** change riscv32 to riscv64*/
+object musl extends Module {
+  override def millSourcePath = os.pwd / "dependencies" / "musl"
+  // ask make to cache file.
+  def libraryResources = T.persistent {
+    os.proc("make", s"DESTDIR=${T.ctx.dest}", "install").call(compilerrt.compile().path)
+    PathRef(T.ctx.dest)
+  }
+  def compile = T.persistent {
+    val p = libraryResources().path
+    os.proc(millSourcePath / "configure", "--target=riscv64-none-elf", "--prefix=/usr").call(
+      T.ctx.dest,
+      Map (
+        "CC" -> "clang",
+        "CXX" -> "clang++",
+        "AR" -> "llvm-ar",
+        "RANLIB" -> "llvm-ranlib",
+        "LD" -> "lld",
+        "LIBCC" -> "-lclang_rt.builtins-riscv64",
+        "CFLAGS" -> "--target=riscv64 -mno-relax -nostdinc",
+        "LDFLAGS" -> s"-fuse-ld=lld --target=riscv64 -nostdlib -L${p}/usr/lib/riscv64",
+      )
+    )
+    os.proc("make", "-j", Runtime.getRuntime().availableProcessors()).call(T.ctx.dest)
+    PathRef(T.ctx.dest)
+  }
+}
+
+object spike extends Module {
+  override def millSourcePath = os.pwd / "dependencies" / "riscv-isa-sim"
+
+  // ask make to cache file.
+  def compile = T.persistent {
+    mill.modules.Jvm.runSubprocess(
+      Seq(millSourcePath / "configure",
+        "--prefix", "/usr",
+        "--without-boost",
+        "--without-boost-asio",
+        "--without-boost-regex"
+      ).map(_.toString),
+      Map(
+        "CC" -> "clang",
+        "CXX" -> "clang++",
+        "AR" -> "llvm-ar",
+        "RANLIB" -> "llvm-ranlib",
+        "LD" -> "lld"
+      ), T.ctx.dest)
+    mill.modules.Jvm.runSubprocess(Seq("make", "-j", Runtime.getRuntime().availableProcessors()).map(_.toString), Map[String, String](), T.ctx.dest)
+    T.ctx.dest
+  }
+}
+
 object rocket extends common.RocketModule with ScalafmtModule {
   m =>
   def scalaVersion = T {
@@ -143,6 +232,31 @@ object diplomatic extends common.DiplomaticModule {
   override def scalacOptions = T {
     Seq("-Xsource:2.11", s"-Xplugin:${mychisel3.plugin.jar().path}")
   }
+}
+
+/** compile target program */
+object cases extends Module {
+  trait Case extends Module {
+    def name: T[String] = millSourcePath.last
+    def sources = T.sources { millSourcePath }
+    def allSourceFiles = T { Lib.findSourceFiles(sources(), Seq("S", "s", "c", "cpp")).map(PathRef(_)) }
+    def linkScript: T[PathRef] = T {
+      os.write(T.ctx.dest / "linker.ld", s"""
+                                            |SECTIONS
+                                            |{
+                                            |  . = 0x1000;
+                                            |  .text.start : { *(.text.start) }
+                                            |}
+                                            |""".stripMargin)
+      PathRef(T.ctx.dest / "linker.ld")
+    }
+    def compile: T[PathRef] = T {
+      os.proc(Seq("clang", "-o", name() + ".elf" ,"--target=riscv64", "-march=rv64gcv", s"-L${musl.compile().path}/lib", s"-L${compilerrt.compile().path}/lib/riscv64", "-mno-relax", s"-T${linkScript().path}") ++ allSourceFiles().map(_.path.toString)).call(T.ctx.dest)
+      os.proc(Seq("llvm-objcopy", "-O", "binary", "--only-section=.text", name() + ".elf", name())).call(T.ctx.dest)
+      PathRef(T.ctx.dest / name())
+    }
+  }
+  object smoketest extends Case
 }
 
 object tests extends Module {
@@ -321,30 +435,6 @@ object tests extends Module {
   }
   /** build emulator */
   object emulator extends Module {
-
-    object spike extends Module {
-      override def millSourcePath = os.pwd / "dependencies" / "riscv-isa-sim"
-
-      // ask make to cache file.
-      def compile = T.persistent {
-        mill.modules.Jvm.runSubprocess(
-          Seq(millSourcePath / "configure",
-            "--prefix", "/usr",
-            "--without-boost",
-            "--without-boost-asio",
-            "--without-boost-regex"
-          ).map(_.toString),
-          Map(
-            "CC" -> "clang",
-            "CXX" -> "clang++",
-            "AR" -> "llvm-ar",
-            "RANLIB" -> "llvm-ranlib",
-            "LD" -> "lld"
-          ), T.ctx.dest)
-        mill.modules.Jvm.runSubprocess(Seq("make", "-j", Runtime.getRuntime().availableProcessors()).map(_.toString), Map[String, String](), T.ctx.dest)
-        T.ctx.dest
-      }
-    }
 
     def csrcDir = T {
       PathRef(millSourcePath / "src")
@@ -717,6 +807,26 @@ object tests extends Module {
 
 }
 
+object mytests extends Module {
+  trait Test extends TaskModule {
+    override def defaultCommandName() = "run"
+
+    def bin: cases.Case
+
+    // todo: add this to run
+    /*def run(args: String*) = T.command {
+      val proc = os.proc(Seq(vector.elaborate.verilated().path.toString, "--bin", bin.compile().path.toString, "--wave", (T.dest / "wave").toString) ++ args)
+      T.log.info(s"run test: ${bin.name} with:\n ${proc.command.map(_.value.mkString(" ")).mkString(" ")}")
+      proc.call()
+      PathRef(T.dest)
+    }*/
+  }
+
+  object smoketest extends Test {
+    def bin = cases.smoketest
+  }
+}
+
 object cosim extends Module {
   object elaborate extends ScalaModule with ScalafmtModule {
     def scalaVersion = T {
@@ -763,105 +873,4 @@ object cosim extends Module {
     }
   }
   /** build emulator */
-  object emulator extends Module {
-
-    object spike extends Module {
-      override def millSourcePath = os.pwd / "dependencies" / "riscv-isa-sim"
-
-      // ask make to cache file.
-      def compile = T.persistent {
-        mill.modules.Jvm.runSubprocess(
-          Seq(millSourcePath / "configure",
-            "--prefix", "/usr",
-            "--without-boost",
-            "--without-boost-asio",
-            "--without-boost-regex"
-          ).map(_.toString),
-          Map(
-            "CC" -> "clang",
-            "CXX" -> "clang++",
-            "AR" -> "llvm-ar",
-            "RANLIB" -> "llvm-ranlib",
-            "LD" -> "lld"
-          ), T.ctx.dest)
-        mill.modules.Jvm.runSubprocess(Seq("make", "-j", Runtime.getRuntime().availableProcessors()).map(_.toString), Map[String, String](), T.ctx.dest)
-        T.ctx.dest
-      }
-    }
-
-    def csrcDir = T {
-      PathRef(millSourcePath / "src")
-    }
-
-    def allCSourceFiles = T {
-      Lib.findSourceFiles(Seq(csrcDir()), Seq("S", "s", "c", "cpp", "cc")).map(PathRef(_))
-    }
-
-    def CMakeListsString = T {
-      // format: off
-      s"""cmake_minimum_required(VERSION 3.20)
-         |project(emulator)
-         |include_directories(${csrcDir().path})
-         |# plusarg is here
-         |include_directories(${elaborate.elaborate().path})
-         |link_directories(${spike.compile().toString})
-         |include_directories(${spike.compile().toString})
-         |include_directories(${spike.millSourcePath.toString})
-         |
-         |set(CMAKE_BUILD_TYPE Release)
-         |set(CMAKE_CXX_STANDARD 17)
-         |set(CMAKE_C_COMPILER "clang")
-         |set(CMAKE_CXX_COMPILER "clang++")
-         |set(CMAKE_CXX_FLAGS "$${CMAKE_CXX_FLAGS} -DVERILATOR -DTEST_HARNESS=VTestHarness")
-         |set(THREADS_PREFER_PTHREAD_FLAG ON)
-         |
-         |find_package(verilator)
-         |find_package(Threads)
-         |
-         |add_executable(emulator
-         |${allCSourceFiles().map(_.path).mkString("\n")}
-         |)
-         |
-         |target_link_libraries(emulator PRIVATE $${CMAKE_THREAD_LIBS_INIT})
-         |target_link_libraries(emulator PRIVATE fesvr)
-         |verilate(emulator
-         |  SOURCES
-         |${vsrcs().map(_.path).mkString("\n")}
-         |  TOP_MODULE DUT
-         |  PREFIX VTestHarness
-         |  VERILATOR_ARGS ${verilatorArgs().mkString(" ")}
-         |)
-         |""".stripMargin
-      // format: on
-    }
-
-    def verilatorArgs = T.input {
-      Seq(
-        // format: off
-        "-Wno-UNOPTTHREADS", "-Wno-STMTDLY", "-Wno-LATCH", "-Wno-WIDTH",
-        "--x-assign unique",
-        "+define+RANDOMIZE_GARBAGE_ASSIGN",
-        "--output-split 20000",
-        "--output-split-cfuncs 20000",
-        "--max-num-width 1048576"
-        // format: on
-      )
-    }
-
-    def vsrcs = T.persistent {
-      elaborate.rtls().filter(p => p.path.ext == "v" || p.path.ext == "sv")
-    }
-
-    def cmakefileLists = T.persistent {
-      val path = T.dest / "CMakeLists.txt"
-      os.write.over(path, CMakeListsString())
-      PathRef(T.dest)
-    }
-    /** return emulator PathRef */
-    def elf = T.persistent {
-      mill.modules.Jvm.runSubprocess(Seq("cmake", "-G", "Ninja", "-S", cmakefileLists().path, "-B", T.dest.toString).map(_.toString), Map[String, String](), T.dest)
-      mill.modules.Jvm.runSubprocess(Seq("ninja", "-C", T.dest).map(_.toString), Map[String, String](), T.dest)
-      PathRef(T.dest / "emulator")
-    }
-  }
 }
