@@ -16,6 +16,13 @@ inline uint32_t decode_size(uint32_t encoded_size) {
 
 //VBridgeImpl::VBridgeImpl() :  {}
 
+void VBridgeImpl::setup(const std::string &_bin, const std::string &_wave, uint64_t _reset_vector, uint64_t cycles) {
+  this->bin = _bin;
+  this->wave = _wave;
+  this->reset_vector = _reset_vector;
+  this->timeout = cycles;
+}
+
 void VBridgeImpl::reset() {
   top.clock = 0;
   top.reset = 1;

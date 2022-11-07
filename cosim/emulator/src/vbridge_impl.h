@@ -19,7 +19,7 @@ public:
 
   ~VBridgeImpl();
 
-
+  void setup(const std::string &bin, const std::string &wave, uint64_t reset_vector, uint64_t cycles);
   // todo remove this.
   void configure_simulator(int argc, char **argv);
 
