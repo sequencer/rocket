@@ -903,31 +903,21 @@ object cosim extends Module {
       )
       PathRef(traceConfigPath)
     }
-    /** todo: has skipped verilator config process here*/
     val topName = "V"
     // set(CMAKE_CXX_FLAGS "$${CMAKE_CXX_FLAGS} -DVERILATOR -DTEST_HARNESS=VTestHarness")
     def CMakeListsString = T {
       // format: off
       s"""cmake_minimum_required(VERSION 3.20)
          |project(emulator)
+         |
          |include(FetchContent)
          |FetchContent_Declare(args GIT_REPOSITORY https://github.com/Taywee/args GIT_TAG 6.4.0)
          |FetchContent_Declare(glog GIT_REPOSITORY https://github.com/google/glog GIT_TAG v0.6.0)
          |FetchContent_Declare(fmt GIT_REPOSITORY https://github.com/fmtlib/fmt GIT_TAG 9.1.0)
          |FetchContent_MakeAvailable(args glog fmt)
-         |include_directories(${csrcDir().path})
-         |# plusarg is here
-         |include_directories(${elaborate.elaborate().path})
-         |link_directories(${spike.compile().toString})
-         |include_directories(${spike.compile().toString})
-         |include_directories(${spike.millSourcePath.toString})
          |
-         |set(CMAKE_BUILD_TYPE Release)
-         |set(CMAKE_CXX_STANDARD 17)
-         |set(CMAKE_C_COMPILER "clang")
-         |set(CMAKE_CXX_COMPILER "clang++")
+         |set(CMAKE_BUILD_TYPE Debug)
          |set(CMAKE_CXX_FLAGS "$${CMAKE_CXX_FLAGS} -DVERILATOR")
-         |set(THREADS_PREFER_PTHREAD_FLAG ON)
          |
          |find_package(verilator)
          |set(CMAKE_CXX_STANDARD 17)
@@ -942,16 +932,17 @@ object cosim extends Module {
          |${allCSourceFiles().map(_.path).mkString("\n")}
          |)
          |
+         |target_include_directories(${topName} PUBLIC ${csources().path.toString})
          |target_include_directories(${topName} PRIVATE ${(spike.millSourcePath / "riscv").toString})
          |target_include_directories(${topName} PRIVATE ${(spike.millSourcePath / "fesvr").toString})
          |target_include_directories(${topName} PRIVATE ${(spike.millSourcePath / "softfloat").toString})
          |target_include_directories(${topName} PRIVATE ${spike.compile().toString})
          |
-         |target_include_directories(${topName} PUBLIC ${csources().path.toString})
-         |
+         |target_link_directories(${topName} PRIVATE ${spike.compile().toString})
          |target_link_libraries(${topName} PRIVATE $${CMAKE_THREAD_LIBS_INIT})
          |target_link_libraries(${topName} PUBLIC $${CMAKE_THREAD_LIBS_INIT})
          |target_link_libraries(${topName} PUBLIC riscv fmt glog args)
+         |
          |verilate(${topName}
          |  SOURCES
          |${vsrcs().map(_.path).mkString("\n")}
