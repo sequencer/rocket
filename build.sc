@@ -887,7 +887,7 @@ object cosim extends Module {
       Lib.findSourceFiles(Seq(csrcDir()), Seq("S", "s", "c", "cpp", "cc")).map(PathRef(_))
     }
     /** todo: has skipped verilator config process here*/
-    val topName = "emulator"
+    val topName = "V"
     def CMakeListsString = T {
       // format: off
       s"""cmake_minimum_required(VERSION 3.20)
@@ -937,8 +937,9 @@ object cosim extends Module {
          |verilate(${topName}
          |  SOURCES
          |${vsrcs().map(_.path).mkString("\n")}
+         |  TRACE_FST
          |  TOP_MODULE DUT
-         |  PREFIX VTestHarness
+         |  PREFIX V${topName}
          |  OPT_FAST
          |  THREADS 8
          |  VERILATOR_ARGS ${verilatorArgs().mkString(" ")}
@@ -961,19 +962,26 @@ object cosim extends Module {
       )
     }
 
-    def cmakefileLists = T.persistent {
+    def elf = T.persistent {
       val path = T.dest / "CMakeLists.txt"
       os.write.over(path, CMakeListsString())
       T.log.info(s"CMake project generated in $path,\nverilating...")
-      PathRef(T.dest)
-    }
-    /** return emulator PathRef */
-    def elf = T.persistent {
-      mill.modules.Jvm.runSubprocess(Seq("cmake", "-G", "Ninja", "-S", cmakefileLists().path, "-B", T.dest.toString).map(_.toString), Map[String, String](), T.dest)
+      os.proc(
+        // format: off
+        "cmake",
+        "-G", "Ninja",
+        T.dest.toString
+        // format: on
+      ).call(T.dest)
       T.log.info("compile rtl to emulator...")
-      mill.modules.Jvm.runSubprocess(Seq("ninja", "-C", T.dest).map(_.toString), Map[String, String](), T.dest)
-      T.log.info(s"verilated exe generated: ${T.dest / s"$topName"}")
-      PathRef(T.dest / s"$topName")
+      os.proc(
+        // format: off
+        "ninja"
+        // format: on
+      ).call(T.dest)
+      val elf = T.dest / topName
+      T.log.info(s"verilated exe generated: ${elf.toString}")
+      PathRef(elf)
     }
   }
 }
