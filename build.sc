@@ -233,7 +233,7 @@ object diplomatic extends common.DiplomaticModule {
   }
 }
 
-/** compile target program */
+/** compile smoke test program */
 object cases extends Module {
   trait Case extends Module {
     def name: T[String] = millSourcePath.last
@@ -806,6 +806,7 @@ object tests extends Module {
 
 }
 
+/** run rocket test*/
 object mytests extends Module {
   trait Test extends TaskModule {
     override def defaultCommandName() = "run"
@@ -891,6 +892,7 @@ object cosim extends Module {
       // format: off
       s"""cmake_minimum_required(VERSION 3.20)
          |project(emulator)
+         |include(FetchContent)
          |FetchContent_Declare(args GIT_REPOSITORY https://github.com/Taywee/args GIT_TAG 6.4.0)
          |FetchContent_Declare(glog GIT_REPOSITORY https://github.com/google/glog GIT_TAG v0.6.0)
          |FetchContent_Declare(fmt GIT_REPOSITORY https://github.com/fmtlib/fmt GIT_TAG 9.1.0)
