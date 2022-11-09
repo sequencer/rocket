@@ -915,7 +915,6 @@ object cosim extends Module {
          |FetchContent_Declare(fmt GIT_REPOSITORY https://github.com/fmtlib/fmt GIT_TAG 9.1.0)
          |FetchContent_MakeAvailable(args glog fmt)
          |
-         |set(CMAKE_BUILD_TYPE Debug)
          |set(CMAKE_CXX_FLAGS "$${CMAKE_CXX_FLAGS} -DVERILATOR")
          |
          |find_package(verilator)

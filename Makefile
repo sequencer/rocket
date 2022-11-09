@@ -31,3 +31,4 @@ mytest:
 
 clean:
 	git clean -fd
+	rm -rf out/cosim/emulator

@@ -8,9 +8,6 @@
 #include "VV.h"
 #include "verilated_fst_c.h"
 
-#include "spike_event.h"
-#include "simple_sim.h"
-
 #include "vbridge_config.h"
 
 
