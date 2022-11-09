@@ -8,14 +8,18 @@
 #include "VV.h"
 #include "verilated_fst_c.h"
 
+#include "spike_event.h"
+#include "simple_sim.h"
+
+#include "vbridge_config.h"
+
 
 class SpikeEvent;
 
 
-
 class VBridgeImpl {
 public:
-  //explicit VBridgeImpl();
+  /*explicit VBridgeImpl();*/
 
   ~VBridgeImpl();
 
@@ -28,15 +32,20 @@ public:
   uint8_t load(uint64_t address);
 
 private:
+  // verilator context
   VerilatedContext ctx;
   VV top;
   VerilatedFstC tfp;
 
+  // spike
+  /*isa_parser_t isa;
+  processor_t proc;*/
+  // spike event
+
+  // mem
+  /*simple_sim sim;*/
+  // parameter
   uint64_t _cycles;
-
-
-
-
   /// file path of executeable binary file, which will be executed.
   std::string bin;
   /// generated waveform path.
@@ -49,7 +58,7 @@ private:
 
   inline void reset();
 
-
+  void init_spike();
 
   void init_simulator();
   void terminate_simulator();

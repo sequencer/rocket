@@ -812,7 +812,7 @@ object mytests extends Module {
     override def defaultCommandName() = "run"
 
     def bin: cases.Case
-    
+
     def run(args: String*) = T.command {
       val proc = os.proc(Seq(cosim.emulator.elf().path.toString(),"--bin", bin.compile().path.toString, "--wave", (T.dest / "wave").toString) ++ args)
       T.log.info(s"run test: ${bin.name} with:\n ${proc.command.map(_.value.mkString(" ")).mkString(" ")}")

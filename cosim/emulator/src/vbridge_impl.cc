@@ -14,7 +14,18 @@ inline uint32_t decode_size(uint32_t encoded_size) {
   return 1 << encoded_size;
 }
 
-//VBridgeImpl::VBridgeImpl() :  {}
+/*VBridgeImpl::VBridgeImpl() :
+    sim(1 << 30),
+    isa("rv32gcv", "M"),
+    proc(
+        *//*isa*//* &isa,
+        *//*varch*//* fmt::format("vlen:{},elen:{}", consts::vlen_in_bits, consts::elen).c_str(),
+        *//*sim*//* &sim,
+        *//*id*//* 0,
+        *//*halt on reset*//* true,
+        *//* endianness*//* memif_endianness_little,
+        *//*log_file_t*//* nullptr,
+        *//*sout*//* std::cerr),*/
 
 void VBridgeImpl::setup(const std::string &_bin, const std::string &_wave, uint64_t _reset_vector, uint64_t cycles) {
   this->bin = _bin;
@@ -57,6 +68,14 @@ void VBridgeImpl::configure_simulator(int argc, char **argv) {
   ctx.commandArgs(argc, argv);
 }
 
+/*void VBridgeImpl::init_spike() {
+  // reset spike CPU
+  proc.reset();
+  // TODO: remove this line, and use CSR write in the test code to enable this the VS field.
+  proc.get_state()->sstatus->write(proc.get_state()->sstatus->read() | SSTATUS_VS);
+  // load binary to reset_vector
+  sim.load(bin, reset_vector);
+}*/
 
 void VBridgeImpl::init_simulator() {
   Verilated::traceEverOn(true);
@@ -80,7 +99,7 @@ uint64_t VBridgeImpl::get_t() {
 
 void VBridgeImpl::run() {
 
-  // init_spike();
+  /*init_spike();*/
   init_simulator();
   reset();
 
