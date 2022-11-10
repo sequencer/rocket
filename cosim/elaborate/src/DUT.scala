@@ -32,7 +32,7 @@ class DUT(p: Parameters) extends Module {
       minLatency = 1
     )))
     masterNode :=* rocketTile.masterNode
-    val memroy = InModuleBody {
+    val memory = InModuleBody {
       masterNode.makeIOs()
     }
 
