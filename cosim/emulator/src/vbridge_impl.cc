@@ -37,6 +37,7 @@ void VBridgeImpl::setup(const std::string &_bin, const std::string &_wave, uint6
 void VBridgeImpl::reset() {
   top.clock = 0;
   top.reset = 1;
+  top.resetVector = 0x1000;
   top.eval();
   tfp.dump(0);
 

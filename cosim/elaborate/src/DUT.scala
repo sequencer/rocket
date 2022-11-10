@@ -16,8 +16,9 @@ class DUT(p: Parameters) extends Module {
     val rocketTile = LazyModule(new RocketTile(tileParams, RocketCrossingParams(), PriorityMuxHartIdFromSeq(Seq(tileParams))))
     val masterNode = TLManagerNode(Seq(TLSlavePortParameters.v1(
       Seq(TLSlaveParameters.v1(
-        address = List(AddressSet(0x80000000L, 0x7fffffffL)),
+        address = List(AddressSet(0x0, 0xffffffffL)),
         regionType = RegionType.UNCACHED,
+        executable = true,
         supportsGet = TransferSizes(1, 64),
         supportsAcquireT = TransferSizes(1, 64),
         supportsAcquireB = TransferSizes(1, 64),

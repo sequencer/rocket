@@ -27,8 +27,11 @@ test:
 	mill -i -j 0 tests.run.rv64default.run
 
 mytest:
-	mill mytests.smoketest --cycles 10
+	rm -rf out/cosim
+	rm -rf out/mytests
+	mill mytests.smoketest --cycles 100
 
 clean:
 	git clean -fd
-	rm -rf out/cosim/emulator
+
+

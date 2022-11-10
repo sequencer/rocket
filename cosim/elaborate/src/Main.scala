@@ -4,6 +4,7 @@ import chisel3.stage.ChiselGeneratorAnnotation
 import circt.stage.{CIRCTTarget, CIRCTTargetAnnotation, ChiselStage, FirtoolOption}
 import firrtl.options.TargetDirAnnotation
 import firrtl.{AnnotationSeq, ChirrtlEmitter, EmitAllModulesAnnotation}
+import freechips.rocketchip.devices.debug.DebugModuleKey
 import freechips.rocketchip.diplomacy.MonitorsEnabled
 import freechips.rocketchip.subsystem.{CacheBlockBytes, SystemBusKey, SystemBusParams}
 import mainargs._
@@ -46,6 +47,7 @@ object Main {
             case SystemBusKey => SystemBusParams(
               beatBytes = site(org.chipsalliance.rockettile.XLen) / 8,
               blockBytes = site(CacheBlockBytes))
+            case DebugModuleKey => None
           })
         )
       }),
