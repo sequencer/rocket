@@ -8,6 +8,7 @@
 #include "VV.h"
 #include "verilated_fst_c.h"
 
+#include "simple_sim.h"
 #include "vbridge_config.h"
 
 
@@ -16,7 +17,7 @@ class SpikeEvent;
 
 class VBridgeImpl {
 public:
-  /*explicit VBridgeImpl();*/
+  explicit VBridgeImpl();
 
   ~VBridgeImpl();
 
@@ -35,12 +36,12 @@ private:
   VerilatedFstC tfp;
 
   // spike
-  /*isa_parser_t isa;
-  processor_t proc;*/
+  isa_parser_t isa;
+  processor_t proc;
   // spike event
 
   // mem
-  /*simple_sim sim;*/
+  simple_sim sim;
   // parameter
   uint64_t _cycles;
   /// file path of executeable binary file, which will be executed.
