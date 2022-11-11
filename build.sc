@@ -185,7 +185,8 @@ object spike extends Module {
         "--prefix", "/usr",
         "--without-boost",
         "--without-boost-asio",
-        "--without-boost-regex"
+        "--without-boost-regex",
+        "--enable-commitlog"
       ).map(_.toString),
       Map(
         "CC" -> "clang",
