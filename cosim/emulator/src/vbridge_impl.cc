@@ -39,7 +39,7 @@ void VBridgeImpl::setup(const std::string &_bin, const std::string &_wave, uint6
 
 void VBridgeImpl::init_spike() {
   // reset spike CPU
-  proc.reset();
+  // proc.reset();
   // TODO: remove this line, and use CSR write in the test code to enable this the VS field.
   proc.get_state()->sstatus->write(proc.get_state()->sstatus->read() | SSTATUS_VS);
   // load binary to reset_vector
@@ -106,7 +106,9 @@ uint64_t VBridgeImpl::get_t() {
   return ctx.time();
 }
 
-
+uint8_t VBridgeImpl::load(uint64_t address){
+  return *sim.addr_to_mem(address);
+}
 
 void VBridgeImpl::run() {
 
