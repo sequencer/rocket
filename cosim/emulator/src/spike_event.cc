@@ -21,10 +21,10 @@ std::string SpikeEvent::describe_insn() const {
   std::memcpy(vd_write_record.vd_bytes.get(), vd_bits_start, len);
 }*/
 
-void SpikeEvent::log_arch_changes() {
+/*void SpikeEvent::log_arch_changes() {
   state_t *state = proc.get_state();
 
-  /*for (auto [write_idx, data]: state->log_reg_write) {
+  *//*for (auto [write_idx, data]: state->log_reg_write) {
     // in spike, log_reg_write is arrange:
     // xx0000 <- x
     // xx0001 <- f
@@ -57,7 +57,7 @@ void SpikeEvent::log_arch_changes() {
     } else {
       LOG(INFO) << fmt::format("spike detect unknown reg change (idx = {:08X})", write_idx);
     }
-  }*/
+  }*//*
 
   for (auto mem_write: state->log_mem_write) {
     uint64_t address = std::get<0>(mem_write);
@@ -83,13 +83,13 @@ void SpikeEvent::log_arch_changes() {
   //state->log_reg_write.clear();
   state->log_mem_read.clear();
   state->log_mem_write.clear();
-}
+}*/
 
-SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl): proc(proc), impl(impl) {
+/*SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl): proc(proc), impl(impl) {
   auto &xr = proc.get_state()->XPR;
-  /*rs1_bits = xr[fetch.insn.rs1()];
+  *//*rs1_bits = xr[fetch.insn.rs1()];
   rs2_bits = xr[fetch.insn.rs2()];
-  rd_idx = fetch.insn.rd();*/
+  rd_idx = fetch.insn.rd();*//*
 
   pc = proc.get_state()->pc;
   inst_bits = fetch.insn.bits();
@@ -101,7 +101,7 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
   is_committed = false;
 
   // lsu_idx = consts::lsuIdxDefault;  // default lsu_idx
-}
+}*/
 
 /*void SpikeEvent::drive_rtl_req(VV &top) const {
   top.req_valid = true;

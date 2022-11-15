@@ -8,11 +8,27 @@
 #include "VV.h"
 #include "verilated_fst_c.h"
 
+#include "spike_event.h"
 #include "simple_sim.h"
 #include "vbridge_config.h"
 
 
 class SpikeEvent;
+
+struct TLReqRecord {
+    uint64_t data;
+    uint32_t size_by_byte;
+    uint16_t source;
+
+    /// when opType set to nil, it means this record is already sent back
+    enum class opType {
+        Nil, Get, PutFullData
+    } op;
+    int remaining_cycles;
+
+    TLReqRecord(uint64_t data, uint32_t size_by_byte, uint16_t source, opType op, int cycles) :
+        data(data), size_by_byte(size_by_byte), source(source), op(op), remaining_cycles(cycles) {};
+};
 
 
 class VBridgeImpl {
@@ -34,14 +50,14 @@ private:
   VerilatedContext ctx;
   VV top;
   VerilatedFstC tfp;
-
+  simple_sim sim;
   // spike
   isa_parser_t isa;
   processor_t proc;
   // spike event
 
   // mem
-  simple_sim sim;
+
   // parameter
   uint64_t _cycles;
   /// file path of executeable binary file, which will be executed.
@@ -54,13 +70,26 @@ private:
   /// note: this is not the real system cycles, scalar instructions is evaulated via spike, which is not recorded.
   uint64_t timeout{};
 
+  // spike
+  const size_t to_rtl_queue_size = 10;
+  std::list<SpikeEvent> to_rtl_queue;
+
+  std::map<reg_t, TLReqRecord> tl_banks[consts::numTL];
+
   inline void reset();
 
   void init_spike();
+  void loop_until_se_queue_full();
+  std::optional<SpikeEvent> spike_step();
+  std::optional<SpikeEvent> create_spike_event(insn_fetch_t fetch);
+  SpikeEvent *find_se_to_issue();
 
   void init_simulator();
   void terminate_simulator();
   uint64_t get_t();
+
+  void return_tl_response();
+  void receive_tl_req();
 
 
 };

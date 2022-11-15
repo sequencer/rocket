@@ -7,7 +7,6 @@
 
 int main(int argc, char **argv) {
   printf("helloworld");
-  printf("helloworld");
   google::InitGoogleLogging(argv[0]);
   google::InstallFailureSignalHandler();
 

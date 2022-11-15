@@ -9,6 +9,8 @@
 #include "vbridge_impl.h"
 #include "util.h"
 #include "tl_interface.h"
+#include "simple_sim.h"
+
 #include "glog_exception_safe.h"
 
 /// convert TL style size to size_by_bytes
@@ -18,17 +20,18 @@ inline uint32_t decode_size(uint32_t encoded_size) {
 
 VBridgeImpl::VBridgeImpl() :
     sim(1 << 30),
-    isa("rv64gc", "M"),
+    isa("rv32gc", "M"),
+    _cycles(100),
     proc(
         /*isa*/ &isa,
-        /*varch*/ fmt::format("vlen:{},elen:{}", consts::vlen_in_bits, consts::elen).c_str(),
+        /*varch*/ fmt::format("vlen:{},elen:{}", 0, 0).c_str(),
         /*sim*/ &sim,
         /*id*/ 0,
         /*halt on reset*/ true,
         /* endianness*/ memif_endianness_little,
         /*log_file_t*/ nullptr,
-        /*sout*/ std::cerr){}
-
+        /*sout*/ std::cerr){
+}
 
 void VBridgeImpl::setup(const std::string &_bin, const std::string &_wave, uint64_t _reset_vector, uint64_t cycles) {
   this->bin = _bin;
@@ -37,14 +40,14 @@ void VBridgeImpl::setup(const std::string &_bin, const std::string &_wave, uint6
   this->timeout = cycles;
 }
 
-void VBridgeImpl::init_spike() {
+/*void VBridgeImpl::init_spike() {
   // reset spike CPU
   // proc.reset();
   // TODO: remove this line, and use CSR write in the test code to enable this the VS field.
   proc.get_state()->sstatus->write(proc.get_state()->sstatus->read() | SSTATUS_VS);
   // load binary to reset_vector
   sim.load(bin, reset_vector);
-}
+}*/
 
 void VBridgeImpl::reset() {
   top.clock = 0;
@@ -79,16 +82,16 @@ void VBridgeImpl::configure_simulator(int argc, char **argv) {
   ctx.commandArgs(argc, argv);
 }
 
-/*void VBridgeImpl::init_spike() {
+void VBridgeImpl::init_spike() {
   // reset spike CPU
   proc.reset();
   // TODO: remove this line, and use CSR write in the test code to enable this the VS field.
   proc.get_state()->sstatus->write(proc.get_state()->sstatus->read() | SSTATUS_VS);
   // load binary to reset_vector
   sim.load(bin, reset_vector);
-}*/
+}
 
-void VBridgeImpl::init_simulator() {
+SpikeEvent *find_se_to_issue();void VBridgeImpl::init_simulator() {
   Verilated::traceEverOn(true);
   top.trace(&tfp, 99);
   tfp.open(wave.c_str());
@@ -106,18 +109,20 @@ uint64_t VBridgeImpl::get_t() {
   return ctx.time();
 }
 
-uint8_t VBridgeImpl::load(uint64_t address){
+/*uint8_t VBridgeImpl::load(uint64_t address){
   return *sim.addr_to_mem(address);
-}
+}*/
 
 void VBridgeImpl::run() {
 
   init_spike();
+  //sim.load(bin, reset_vector);
   init_simulator();
   reset();
 
   // start loop
   while (true) {
+
       top.eval();
       // negedge
       top.clock = 0;
@@ -132,9 +137,165 @@ void VBridgeImpl::run() {
       if (get_t() >= timeout) {
         throw TimeoutException();
       }
+
+    }
+  }
+
+/*void VBridgeImpl::loop_until_se_queue_full() {
+  while (to_rtl_queue.size() < to_rtl_queue_size) {
+    try {
+      if (auto spike_event = spike_step()) {
+        SpikeEvent &se = spike_event.value();
+        to_rtl_queue.push_front(std::move(se));
+      }
+    } catch (trap_t &trap) {
+      LOG(FATAL) << fmt::format("spike trapped with {}", trap.name());
+    }
+  }
+  LOG(INFO) << fmt::format("to_rtl_queue is full now, start to simulate.");
+}*/
+
+/*std::optional<SpikeEvent> VBridgeImpl::spike_step() {
+  auto state = proc.get_state();
+  auto fetch = proc.get_mmu()->load_insn(state->pc);
+  auto event = create_spike_event(fetch);  // event not empty iff fetch is v inst
+  auto &xr = proc.get_state()->XPR; // todo: ?
+  if (event) {
+    auto &se = event.value();
+    state->pc = fetch.func(&proc, fetch.insn, state->pc);
+    se.log_arch_changes();
+  } else {
+    state->pc = fetch.func(&proc, fetch.insn, state->pc);
+  }
+
+  return event;
+}*/
+
+/*std::optional<SpikeEvent> VBridgeImpl::create_spike_event(insn_fetch_t fetch) {
+  // create SpikeEvent
+  uint32_t opcode = clip(fetch.insn.bits(), 0, 6);
+  uint32_t width = clip(fetch.insn.bits(), 12, 14);
+  bool is_load_type  = opcode == 0b0000111;
+  bool is_store_type = opcode == 0b0100111;
+  *//*if (is_load_type || is_store_type) {
+    return SpikeEvent{proc, fetch, this};
+  } else {
+    return {};
+  }*//*
+  return SpikeEvent{proc, fetch, this};
+}*/
+
+/*SpikeEvent *VBridgeImpl::find_se_to_issue() {
+  SpikeEvent *se_to_issue = nullptr;
+  for (auto iter = to_rtl_queue.rbegin(); iter != to_rtl_queue.rend(); iter++) {
+    if (!iter->is_issued) {
+      se_to_issue = &(*iter);
+      break;
+    }
+  }
+  CHECK(se_to_issue) << fmt::format("[{}] all events in to_rtl_queue are is_issued", get_t());  // TODO: handle this
+  return se_to_issue;
+}*/
+
+/*void VBridgeImpl::receive_tl_req() {
+#define TL(i, name) (get_tl_##name(top, (i)))
+  for (int tlIdx = 0; tlIdx < 2; tlIdx++) {
+    if (!TL(tlIdx, a_valid)) continue;
+
+    uint8_t opcode = TL(tlIdx, a_bits_opcode);
+    uint32_t addr = TL(tlIdx, a_bits_address);
+    uint8_t size = TL(tlIdx, a_bits_size);
+    uint8_t src = TL(tlIdx, a_bits_source);   // MSHR id, TODO: be returned in D channel
+    uint32_t lsu_index = TL(tlIdx, a_bits_source) & 3;
+    SpikeEvent *se;
+    for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
+      if (se_iter->lsu_idx == lsu_index) {
+        se = &(*se_iter);
+      }
+    }
+    CHECK_S(se) << fmt::format(": [{]] cannot find SpikeEvent with lsu_idx={}", get_t(), lsu_index);
+
+    switch (opcode) {
+
+      case TlOpcode::Get: {
+        auto mem_read = se->mem_access_record.all_reads.find(addr);
+        CHECK_S(mem_read != se->mem_access_record.all_reads.end())
+                << fmt::format(": [{}] cannot find mem read of addr {:08X}", get_t(), addr);
+        CHECK_EQ_S(mem_read->second.size_by_byte, decode_size(size)) << fmt::format(
+              ": [{}] expect mem read of size {}, actual size {} (addr={:08X}, {})",
+              get_t(), mem_read->second.size_by_byte, 1 << decode_size(size), addr, se->describe_insn());
+
+        uint64_t data = mem_read->second.val;
+        LOG(INFO) << fmt::format("[{}] receive rtl mem get req (addr={}, size={}byte), should return data {}",
+                                 get_t(), addr, decode_size(size), data);
+        tl_banks[tlIdx].emplace(std::make_pair(addr, TLReqRecord{
+            data, 1u << size, src, TLReqRecord::opType::Get, get_mem_req_cycles()
+        }));
+        mem_read->second.executed = true;
+        break;
+      }
+
+      case TlOpcode::PutFullData: {
+        uint32_t data = TL(tlIdx, a_bits_data);
+        LOG(INFO) << fmt::format("[{}] receive rtl mem put req (addr={:08X}, size={}byte, data={})",
+                                 addr, decode_size(size), data);
+        auto mem_write = se->mem_access_record.all_writes.find(addr);
+
+        CHECK_S(mem_write != se->mem_access_record.all_writes.end())
+                << fmt::format(": [{}] cannot find mem write of addr={:08X}", get_t(), addr);
+        CHECK_EQ_S(mem_write->second.size_by_byte, decode_size(size)) << fmt::format(
+              ": [{}] expect mem write of size {}, actual size {} (addr={:08X}, insn='{}')",
+              get_t(), mem_write->second.size_by_byte, 1 << decode_size(size), addr, se->describe_insn());
+        CHECK_EQ_S(mem_write->second.val, data) << fmt::format(
+              ": [{}] expect mem write of data {}, actual data {} (addr={:08X}, insn='{}')",
+              get_t(), mem_write->second.size_by_byte, 1 << decode_size(size), addr, se->describe_insn());
+
+        tl_banks[tlIdx].emplace(std::make_pair(addr, TLReqRecord{
+            data, 1u << size, src, TLReqRecord::opType::PutFullData, get_mem_req_cycles()
+        }));
+        mem_write->second.executed = true;
+        break;
+      }
+      default: {
+        LOG(FATAL) << fmt::format("unknown tl opcode {}", opcode);
+      }
+    }
+  }
+#undef TL
+}*/
+
+/*void VBridgeImpl::return_tl_response() {
+#define TL(i, name) (get_tl_##name(top, (i)))
+  for (int i = 0; i < consts::numTL; i++) {
+    // update remaining_cycles
+    for (auto &[addr, record]: tl_banks[i]) {
+      if (record.remaining_cycles > 0) record.remaining_cycles--;
     }
 
-}
+    // find a finished request and return
+    bool d_valid = false;
+    for (auto &[addr, record]: tl_banks[i]) {
+      if (record.remaining_cycles == 0) {
+        TL(i, d_bits_opcode) = record.op == TLReqRecord::opType::Get ? TlOpcode::AccessAckData : TlOpcode::AccessAck;
+        TL(i, d_bits_data) = record.data;
+        TL(i, d_bits_sink) = record.source;
+        d_valid = true;
+        record.op = TLReqRecord::opType::Nil;
+        break;
+      }
+    }
+    TL(i, d_valid) = d_valid;
+
+    // collect garbage
+    erase_if(tl_banks[i], [](const auto &record) {
+        return record.second.op == TLReqRecord::opType::Nil;
+    });
+
+    // welcome new requests all the time
+    TL(i, a_ready) = true;
+  }
+#undef TL
+}*/
 
 
 
