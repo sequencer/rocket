@@ -1,4 +1,5 @@
 #include <args.hxx>
+#include <fmt/core.h>
 #include <glog/logging.h>
 
 #include "vbridge.h"
@@ -6,7 +7,7 @@
 #include "glog_exception_safe.h"
 
 int main(int argc, char **argv) {
-  printf("helloworld");
+  FLAGS_logtostderr = 1;
   google::InitGoogleLogging(argv[0]);
   google::InstallFailureSignalHandler();
 
@@ -16,9 +17,10 @@ int main(int argc, char **argv) {
   args::ValueFlag<uint64_t> reset_vector(parser, "reset_vector", "set reset vector", {"reset-vector"}, 0x1000);
   args::ValueFlag<uint64_t> cycles(parser, "cycles", "set simulation cycles", {"cycles"}, 0x7fffffff);
   parser.ParseCLI(argc, argv);
-
+  
   try {
     VBridge vb;
+    LOG(INFO) << fmt::format("to_rtl_queue is full now, start to simulate.");
     vb.configure_simulator(argc, argv);
     vb.setup(bin.Get(), wave.Get() + ".fst", reset_vector.Get(), cycles.Get());
     vb.loop();
