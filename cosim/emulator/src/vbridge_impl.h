@@ -50,15 +50,14 @@ private:
   VerilatedContext ctx;
   VV top;
   VerilatedFstC tfp;
+  // mem
   simple_sim sim;
-  // spike
+  // spike init
   isa_parser_t isa;
   processor_t proc;
   // spike event
 
-  // mem
-
-  // parameter
+  // parameter used in verilator
   uint64_t _cycles;
   /// file path of executeable binary file, which will be executed.
   std::string bin;
@@ -71,7 +70,7 @@ private:
   uint64_t timeout{};
 
   // spike
-  const size_t to_rtl_queue_size = 10;
+  const size_t to_rtl_queue_size = 5;
   std::list<SpikeEvent> to_rtl_queue;
 
   std::map<reg_t, TLReqRecord> tl_banks[consts::numTL];

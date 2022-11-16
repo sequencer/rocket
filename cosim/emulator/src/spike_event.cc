@@ -21,43 +21,43 @@ std::string SpikeEvent::describe_insn() const {
   std::memcpy(vd_write_record.vd_bytes.get(), vd_bits_start, len);
 }*/
 
-/*void SpikeEvent::log_arch_changes() {
+void SpikeEvent::log_arch_changes() {
   state_t *state = proc.get_state();
 
-  *//*for (auto [write_idx, data]: state->log_reg_write) {
-    // in spike, log_reg_write is arrange:
-    // xx0000 <- x
-    // xx0001 <- f
-    // xx0010 <- vreg
-    // xx0011 <- vec
-    // xx0100 <- csr
-    if ((write_idx & 0xf) == 0b0010) {  // vreg
-      auto vd = (write_idx >> 4);
-      CHECK_EQ_S(vd, rd_idx) << fmt::format("expect to write vrf[{}], detect writing vrf[{}]", rd_idx, vd);
-      CHECK_LT_S(vd, 32) << fmt::format("log_reg_write vd ({}) out of bound", vd);
-
-      uint8_t *vd_bits_start = &proc.VU.elt<uint8_t>(rd_idx, 0);
-      uint32_t len = consts::vlen_in_bits << vlmul / 8;
-      for (int i = 0; i < len; i++) {
-        uint8_t origin_byte = vd_write_record.vd_bytes[i], cur_byte = vd_bits_start[i];
-        if (origin_byte != cur_byte) {
-          vrf_access_record.all_writes[vd * consts::vlen_in_bytes + i] = {.byte = cur_byte };
-          LOG(INFO) << fmt::format("spike detect vrf change: vrf[{}, {}] from {} to {} [{}]",
-                                   vd, i, (int) origin_byte, (int) cur_byte, vd * consts::vlen_in_bytes + i);
-        }
-      }
-
-    } else if ((write_idx & 0xf) == 0b0000) {  // scalar rf
-      uint32_t new_rd_bits = proc.get_state()->XPR[rd_idx];
-      if (new_rd_bits != rd_bits) {
-        rd_bits = new_rd_bits;
-        is_rd_written = true;
-        LOG(INFO) << fmt::format("spike detect scalar rf change: x[{}] from {} to {}", rd_idx, rd_bits, new_rd_bits);
-      }
-    } else {
-      LOG(INFO) << fmt::format("spike detect unknown reg change (idx = {:08X})", write_idx);
-    }
-  }*//*
+//  for (auto [write_idx, data]: state->log_reg_write) {
+//    // in spike, log_reg_write is arrange:
+//    // xx0000 <- x
+//    // xx0001 <- f
+//    // xx0010 <- vreg
+//    // xx0011 <- vec
+//    // xx0100 <- csr
+//    if ((write_idx & 0xf) == 0b0010) {  // vreg
+//      auto vd = (write_idx >> 4);
+//      CHECK_EQ_S(vd, rd_idx) << fmt::format("expect to write vrf[{}], detect writing vrf[{}]", rd_idx, vd);
+//      CHECK_LT_S(vd, 32) << fmt::format("log_reg_write vd ({}) out of bound", vd);
+//
+//      uint8_t *vd_bits_start = &proc.VU.elt<uint8_t>(rd_idx, 0);
+//      uint32_t len = consts::vlen_in_bits << vlmul / 8;
+//      for (int i = 0; i < len; i++) {
+//        uint8_t origin_byte = vd_write_record.vd_bytes[i], cur_byte = vd_bits_start[i];
+//        if (origin_byte != cur_byte) {
+//          vrf_access_record.all_writes[vd * consts::vlen_in_bytes + i] = {.byte = cur_byte };
+//          LOG(INFO) << fmt::format("spike detect vrf change: vrf[{}, {}] from {} to {} [{}]",
+//                                   vd, i, (int) origin_byte, (int) cur_byte, vd * consts::vlen_in_bytes + i);
+//        }
+//      }
+//
+//    } else if ((write_idx & 0xf) == 0b0000) {  // scalar rf
+//      uint32_t new_rd_bits = proc.get_state()->XPR[rd_idx];
+//      if (new_rd_bits != rd_bits) {
+//        rd_bits = new_rd_bits;
+//        is_rd_written = true;
+//        LOG(INFO) << fmt::format("spike detect scalar rf change: x[{}] from {} to {}", rd_idx, rd_bits, new_rd_bits);
+//      }
+//    } else {
+//      LOG(INFO) << fmt::format("spike detect unknown reg change (idx = {:08X})", write_idx);
+//    }
+//  }
 
   for (auto mem_write: state->log_mem_write) {
     uint64_t address = std::get<0>(mem_write);
@@ -83,13 +83,10 @@ std::string SpikeEvent::describe_insn() const {
   //state->log_reg_write.clear();
   state->log_mem_read.clear();
   state->log_mem_write.clear();
-}*/
+}
 
-/*SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl): proc(proc), impl(impl) {
+SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl): proc(proc), impl(impl) {
   auto &xr = proc.get_state()->XPR;
-  *//*rs1_bits = xr[fetch.insn.rs1()];
-  rs2_bits = xr[fetch.insn.rs2()];
-  rd_idx = fetch.insn.rd();*//*
 
   pc = proc.get_state()->pc;
   inst_bits = fetch.insn.bits();
@@ -100,27 +97,11 @@ std::string SpikeEvent::describe_insn() const {
   is_issued = false;
   is_committed = false;
 
-  // lsu_idx = consts::lsuIdxDefault;  // default lsu_idx
-}*/
+}
 
-/*void SpikeEvent::drive_rtl_req(VV &top) const {
-  top.req_valid = true;
-  top.req_bits_inst = inst_bits;
-  top.req_bits_src1Data = rs1_bits;
-  top.req_bits_src2Data = rs2_bits;
-  top.storeBufferClear = true;
-}*/
 
-/*void SpikeEvent::drive_rtl_csr(VV &top) const {
-  top.csrInterface_vSew = vsew;
-  top.csrInterface_vlmul = vlmul;
-  top.csrInterface_vma = vma;
-  top.csrInterface_vta = vta;
-  top.csrInterface_vl = vl;
-  top.csrInterface_vStart = vstart;
-  top.csrInterface_vxrm = vxrm;
-  top.csrInterface_ignoreException = false;
-}*/
+
+
 
 /*void SpikeEvent::check_is_ready_for_commit() {
   for (auto &[addr, mem_write]: mem_access_record.all_writes) {

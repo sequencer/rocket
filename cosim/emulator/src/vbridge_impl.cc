@@ -40,14 +40,7 @@ void VBridgeImpl::setup(const std::string &_bin, const std::string &_wave, uint6
   this->timeout = cycles;
 }
 
-/*void VBridgeImpl::init_spike() {
-  // reset spike CPU
-  // proc.reset();
-  // TODO: remove this line, and use CSR write in the test code to enable this the VS field.
-  proc.get_state()->sstatus->write(proc.get_state()->sstatus->read() | SSTATUS_VS);
-  // load binary to reset_vector
-  sim.load(bin, reset_vector);
-}*/
+
 
 void VBridgeImpl::reset() {
   top.clock = 0;
@@ -109,9 +102,9 @@ uint64_t VBridgeImpl::get_t() {
   return ctx.time();
 }
 
-/*uint8_t VBridgeImpl::load(uint64_t address){
+uint8_t VBridgeImpl::load(uint64_t address){
   return *sim.addr_to_mem(address);
-}*/
+}
 
 void VBridgeImpl::run() {
 
@@ -122,7 +115,7 @@ void VBridgeImpl::run() {
 
   // start loop
   while (true) {
-
+    loop_until_se_queue_full();
       top.eval();
       // negedge
       top.clock = 0;
@@ -141,7 +134,7 @@ void VBridgeImpl::run() {
     }
   }
 
-/*void VBridgeImpl::loop_until_se_queue_full() {
+void VBridgeImpl::loop_until_se_queue_full() {
   while (to_rtl_queue.size() < to_rtl_queue_size) {
     try {
       if (auto spike_event = spike_step()) {
@@ -152,38 +145,28 @@ void VBridgeImpl::run() {
       LOG(FATAL) << fmt::format("spike trapped with {}", trap.name());
     }
   }
+  printf("success\n");
   LOG(INFO) << fmt::format("to_rtl_queue is full now, start to simulate.");
-}*/
+}
 
-/*std::optional<SpikeEvent> VBridgeImpl::spike_step() {
+// ->log_arch_changes()
+// ->create_spike_event()
+std::optional<SpikeEvent> VBridgeImpl::spike_step() {
   auto state = proc.get_state();
   auto fetch = proc.get_mmu()->load_insn(state->pc);
   auto event = create_spike_event(fetch);  // event not empty iff fetch is v inst
   auto &xr = proc.get_state()->XPR; // todo: ?
-  if (event) {
-    auto &se = event.value();
-    state->pc = fetch.func(&proc, fetch.insn, state->pc);
-    se.log_arch_changes();
-  } else {
-    state->pc = fetch.func(&proc, fetch.insn, state->pc);
-  }
-
+  // now event always exists,just func
+  // todo: detail ?
+  state->pc = fetch.func(&proc, fetch.insn, state->pc);
   return event;
-}*/
+}
 
-/*std::optional<SpikeEvent> VBridgeImpl::create_spike_event(insn_fetch_t fetch) {
-  // create SpikeEvent
-  uint32_t opcode = clip(fetch.insn.bits(), 0, 6);
-  uint32_t width = clip(fetch.insn.bits(), 12, 14);
-  bool is_load_type  = opcode == 0b0000111;
-  bool is_store_type = opcode == 0b0100111;
-  *//*if (is_load_type || is_store_type) {
-    return SpikeEvent{proc, fetch, this};
-  } else {
-    return {};
-  }*//*
+// now we take all the instruction as spike event
+std::optional<SpikeEvent> VBridgeImpl::create_spike_event(insn_fetch_t fetch) {
+
   return SpikeEvent{proc, fetch, this};
-}*/
+}
 
 /*SpikeEvent *VBridgeImpl::find_se_to_issue() {
   SpikeEvent *se_to_issue = nullptr;
