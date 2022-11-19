@@ -321,31 +321,6 @@ object tests extends Module {
   }
 
   object emulator extends Module {
-
-    object spike extends Module {
-      override def millSourcePath = os.pwd / "dependencies" / "riscv-isa-sim"
-
-      // ask make to cache file.
-      def compile = T.persistent {
-        mill.modules.Jvm.runSubprocess(
-          Seq(millSourcePath / "configure",
-            "--prefix", "/usr",
-            "--without-boost",
-            "--without-boost-asio",
-            "--without-boost-regex"
-          ).map(_.toString),
-          Map(
-            "CC" -> "clang",
-            "CXX" -> "clang++",
-            "AR" -> "llvm-ar",
-            "RANLIB" -> "llvm-ranlib",
-            "LD" -> "lld"
-          ), T.ctx.dest)
-        mill.modules.Jvm.runSubprocess(Seq("make", "-j", Runtime.getRuntime().availableProcessors()).map(_.toString), Map[String, String](), T.ctx.dest)
-        T.ctx.dest
-      }
-    }
-
     def csrcDir = T {
       PathRef(millSourcePath / "src")
     }
@@ -361,9 +336,8 @@ object tests extends Module {
          |include_directories(${csrcDir().path})
          |# plusarg is here
          |include_directories(${elaborate.elaborate().path})
-         |link_directories(${spike.compile().toString})
-         |include_directories(${spike.compile().toString})
-         |include_directories(${spike.millSourcePath.toString})
+         |link_directories(${sys.env("SPIKE_ROOT") + "/lib"})
+         |include_directories(${sys.env("SPIKE_ROOT") + "/include"})
          |
          |set(CMAKE_BUILD_TYPE Release)
          |set(CMAKE_CXX_STANDARD 17)
@@ -433,6 +407,11 @@ object tests extends Module {
     }
 
     object riscvtests extends Module {
+      lazy val allCases = {
+        val root = os.Path(sys.env("RISCV_TESTS_ROOT") + "/share/riscv-tests/isa")
+        os.walk(root).filterNot(p => p.last.endsWith("dump"))
+      }
+
       trait Suite extends c.Suite {
         def name = T {
           millSourcePath.last
@@ -443,21 +422,8 @@ object tests extends Module {
         }
 
         def binaries = T {
-          os.walk(untar().path).filter(p => p.last.startsWith(name())).filterNot(p => p.last.endsWith("dump")).map(PathRef(_))
+          allCases.filter(p => p.last.startsWith(name())).map(PathRef(_))
         }
-      }
-
-      def commit = T.input {
-        "047314c5b0525b86f7d5bb6ffe608f7a8b33ffdb"
-      }
-
-      def tgz = T.persistent {
-        Util.download(s"https://github.com/ZenithalHourlyRate/riscv-tests-release/releases/download/tag-${commit()}/riscv-tests.tgz")
-      }
-
-      def untar = T.persistent {
-        mill.modules.Jvm.runSubprocess(Seq("tar", "xzf", tgz().path).map(_.toString), Map[String, String](), T.dest)
-        PathRef(T.dest)
       }
 
       // These bucket are generated via
@@ -564,6 +530,7 @@ object tests extends Module {
       def run = T {
         testcases().map { bin =>
           val name = bin.path.last
+          System.out.println(s"Running: ${emulator.elf().path} ${bin.path}")
           val p = os.proc(emulator.elf().path, bin.path).call(stdout = T.dest / s"$name.running.log", mergeErrIntoOut = true)
           PathRef(if(p.exitCode != 0) {
             os.move(T.dest / s"$name.running.log", T.dest / s"$name.failed.log")

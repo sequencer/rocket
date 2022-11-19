@@ -15,7 +15,7 @@ pipeline {
     }
     stage('tests') {
       steps {
-        sh 'mill -j 0 tests.run.rv64default.report'
+        sh 'nix-shell --run "make test-ci"'
       }
     }
   }

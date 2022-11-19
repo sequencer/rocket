@@ -28,3 +28,6 @@
 [submodule "dependencies/riscv-pk"]
 	path = dependencies/riscv-pk
 	url = git@github.com:riscv-software-src/riscv-pk
+[submodule "dependencies/nix"]
+	path = dependencies/nix
+	url = https://github.com/CircuitCoder/nix.git

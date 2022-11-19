@@ -26,5 +26,8 @@ compile:
 test:
 	mill -i -j 0 tests.run.rv64default.run
 
+test-ci:
+	mill --no-server -j 0 tests.run.rv64default.run
+
 clean:
 	git clean -fd
