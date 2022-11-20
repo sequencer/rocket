@@ -1,9 +1,14 @@
-{ pkgs ? import ./dependencies/nix/pinned-nixpkgs.nix {}}:
 let
-  circt = import ./dependencies/nix/circt.nix { inherit pkgs; };
-  llvm = import ./dependencies/nix/llvm-mlir.nix { inherit pkgs; };
-  spike = import ./dependencies/nix/spike.nix { inherit pkgs; };
-  rvtests = import ./dependencies/nix/riscv-tests.nix { inherit pkgs; };
+  packed = builtins.fetchGit {
+    url = "https://github.com/CircuitCoder/meow.nix";
+    rev = "73a5e6e89c6b68dada14ddd31e78d9b40538f6c5";
+  };
+in
+{ pkgs ? import "${packed}/pinned-nixpkgs.nix" {}}:
+let
+  circt = import "${packed}/circt.nix" { inherit pkgs; };
+  spike = import "${packed}/spike.nix" { inherit pkgs; };
+  rvtests = import "${packed}/riscv-tests.nix" { inherit pkgs; };
 in
   pkgs.mkShell {
     nativeBuildInputs = [
