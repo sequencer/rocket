@@ -30,4 +30,4 @@
 	url = git@github.com:riscv-software-src/riscv-pk
 [submodule "dependencies/nix"]
 	path = dependencies/nix
-	url = https://github.com/CircuitCoder/nix.git
+	url = https://github.com/CircuitCoder/meow.nix.git
