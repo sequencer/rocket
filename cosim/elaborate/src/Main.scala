@@ -1,5 +1,8 @@
 package rocket.tests
 
+import chisel3.RegNext
+import chisel3.aop.Select
+import chisel3.aop.injecting.InjectingAspect
 import chisel3.stage.ChiselGeneratorAnnotation
 import circt.stage.{CIRCTTarget, CIRCTTargetAnnotation, ChiselStage, FirtoolOption}
 import firrtl.options.TargetDirAnnotation
@@ -9,8 +12,9 @@ import freechips.rocketchip.diplomacy.MonitorsEnabled
 import freechips.rocketchip.subsystem.{CacheBlockBytes, SystemBusKey, SystemBusParams}
 import mainargs._
 import org.chipsalliance.cde.config.{Config, Field}
-import org.chipsalliance.rocket.{DCacheParams, ICacheParams, MulDivParams, RocketCoreParams}
+import org.chipsalliance.rocket.{DCacheParams, FrontendModule, ICacheModule, ICacheParams, MulDivParams, Rocket, RocketCoreParams}
 import org.chipsalliance.rockettile.RocketTileParams
+import rocket.tests.DUT
 
 
 object RocketTileParamsKey extends Field[RocketTileParams]
@@ -54,7 +58,14 @@ object Main {
       firrtl.passes.memlib.InferReadWriteAnnotation,
       CIRCTTargetAnnotation(CIRCTTarget.Verilog),
       EmitAllModulesAnnotation(classOf[ChirrtlEmitter]),
-      FirtoolOption("--disable-annotation-unknown")
+      FirtoolOption("--disable-annotation-unknown"),
+      InjectingAspect(
+        { dut: DUT => Select.collectDeep(dut){ case icache : ICacheModule => icache } },
+        {
+          icache : ICacheModule =>
+            chisel3.experimental.Trace.traceName(icache.s2_miss)
+        }
+      )
     )))
   }
 

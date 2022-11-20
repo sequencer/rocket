@@ -73,7 +73,7 @@ private:
   const size_t to_rtl_queue_size = 5;
   std::list<SpikeEvent> to_rtl_queue;
 
-  std::map<reg_t, TLReqRecord> tl_banks[consts::numTL];
+  std::map<reg_t, TLReqRecord> tl_banks;
 
   inline void reset();
 
@@ -89,6 +89,10 @@ private:
 
   void return_tl_response();
   void receive_tl_req();
+
+  int get_mem_req_cycles() {
+    return 1;
+  };
 
 
 };

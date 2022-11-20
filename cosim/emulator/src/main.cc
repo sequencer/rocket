@@ -20,7 +20,6 @@ int main(int argc, char **argv) {
   
   try {
     VBridge vb;
-    LOG(INFO) << fmt::format("to_rtl_queue is full now, start to simulate.");
     vb.configure_simulator(argc, argv);
     vb.setup(bin.Get(), wave.Get() + ".fst", reset_vector.Get(), cycles.Get());
     vb.loop();

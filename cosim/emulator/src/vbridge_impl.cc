@@ -10,6 +10,7 @@
 #include "util.h"
 #include "tl_interface.h"
 #include "simple_sim.h"
+#include "vpi.h"
 
 #include "glog_exception_safe.h"
 
@@ -53,6 +54,7 @@ void VBridgeImpl::reset() {
   top.clock = 1;
   top.eval();
   tfp.dump(1);
+
 
   // negedge
   top.reset = 0;
@@ -118,10 +120,12 @@ void VBridgeImpl::run() {
     loop_until_se_queue_full();
       top.eval();
       // negedge
+      // receive_tl_req();
       top.clock = 0;
       top.eval();
       tfp.dump(2 * ctx.time());
       ctx.timeInc(1);
+
       // posedge, update registers
       top.clock = 1;
       top.eval();
@@ -145,7 +149,6 @@ void VBridgeImpl::loop_until_se_queue_full() {
       LOG(FATAL) << fmt::format("spike trapped with {}", trap.name());
     }
   }
-  printf("success\n");
   LOG(INFO) << fmt::format("to_rtl_queue is full now, start to simulate.");
 }
 
@@ -156,9 +159,14 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
   auto fetch = proc.get_mmu()->load_insn(state->pc);
   auto event = create_spike_event(fetch);  // event not empty iff fetch is v inst
   auto &xr = proc.get_state()->XPR; // todo: ?
+
+  auto &se = event.value();
   // now event always exists,just func
   // todo: detail ?
   state->pc = fetch.func(&proc, fetch.insn, state->pc);
+  se.log_arch_changes();
+
+
   return event;
 }
 
@@ -180,72 +188,78 @@ std::optional<SpikeEvent> VBridgeImpl::create_spike_event(insn_fetch_t fetch) {
   return se_to_issue;
 }*/
 
-/*void VBridgeImpl::receive_tl_req() {
-#define TL(i, name) (get_tl_##name(top, (i)))
-  for (int tlIdx = 0; tlIdx < 2; tlIdx++) {
-    if (!TL(tlIdx, a_valid)) continue;
-
-    uint8_t opcode = TL(tlIdx, a_bits_opcode);
-    uint32_t addr = TL(tlIdx, a_bits_address);
-    uint8_t size = TL(tlIdx, a_bits_size);
-    uint8_t src = TL(tlIdx, a_bits_source);   // MSHR id, TODO: be returned in D channel
-    uint32_t lsu_index = TL(tlIdx, a_bits_source) & 3;
-    SpikeEvent *se;
-    for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-      if (se_iter->lsu_idx == lsu_index) {
-        se = &(*se_iter);
-      }
-    }
-    CHECK_S(se) << fmt::format(": [{]] cannot find SpikeEvent with lsu_idx={}", get_t(), lsu_index);
-
-    switch (opcode) {
-
-      case TlOpcode::Get: {
-        auto mem_read = se->mem_access_record.all_reads.find(addr);
-        CHECK_S(mem_read != se->mem_access_record.all_reads.end())
-                << fmt::format(": [{}] cannot find mem read of addr {:08X}", get_t(), addr);
-        CHECK_EQ_S(mem_read->second.size_by_byte, decode_size(size)) << fmt::format(
-              ": [{}] expect mem read of size {}, actual size {} (addr={:08X}, {})",
-              get_t(), mem_read->second.size_by_byte, 1 << decode_size(size), addr, se->describe_insn());
-
-        uint64_t data = mem_read->second.val;
-        LOG(INFO) << fmt::format("[{}] receive rtl mem get req (addr={}, size={}byte), should return data {}",
-                                 get_t(), addr, decode_size(size), data);
-        tl_banks[tlIdx].emplace(std::make_pair(addr, TLReqRecord{
-            data, 1u << size, src, TLReqRecord::opType::Get, get_mem_req_cycles()
-        }));
-        mem_read->second.executed = true;
-        break;
-      }
-
-      case TlOpcode::PutFullData: {
-        uint32_t data = TL(tlIdx, a_bits_data);
-        LOG(INFO) << fmt::format("[{}] receive rtl mem put req (addr={:08X}, size={}byte, data={})",
-                                 addr, decode_size(size), data);
-        auto mem_write = se->mem_access_record.all_writes.find(addr);
-
-        CHECK_S(mem_write != se->mem_access_record.all_writes.end())
-                << fmt::format(": [{}] cannot find mem write of addr={:08X}", get_t(), addr);
-        CHECK_EQ_S(mem_write->second.size_by_byte, decode_size(size)) << fmt::format(
-              ": [{}] expect mem write of size {}, actual size {} (addr={:08X}, insn='{}')",
-              get_t(), mem_write->second.size_by_byte, 1 << decode_size(size), addr, se->describe_insn());
-        CHECK_EQ_S(mem_write->second.val, data) << fmt::format(
-              ": [{}] expect mem write of data {}, actual data {} (addr={:08X}, insn='{}')",
-              get_t(), mem_write->second.size_by_byte, 1 << decode_size(size), addr, se->describe_insn());
-
-        tl_banks[tlIdx].emplace(std::make_pair(addr, TLReqRecord{
-            data, 1u << size, src, TLReqRecord::opType::PutFullData, get_mem_req_cycles()
-        }));
-        mem_write->second.executed = true;
-        break;
-      }
-      default: {
-        LOG(FATAL) << fmt::format("unknown tl opcode {}", opcode);
-      }
-    }
+void VBridgeImpl::receive_tl_req() {
+#define TL(name) (get_tl_##name(top))
+  if (!TL(a_valid)) return;
+  // store A channel req
+  uint8_t opcode = TL(a_bits_opcode);
+  if (opcode == 4){
+    LOG(INFO) << fmt::format("Find Mem req");
   }
+  uint32_t addr = TL(a_bits_address);
+  uint8_t size = TL(a_bits_size);
+  uint8_t src = TL(a_bits_source);   // MSHR id, TODO: be returned in D channel
+  // find corresponding SpikeEvent
+  SpikeEvent *se;
+  for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
+
+    auto mem_read = se_iter->mem_access_record.all_reads.find(addr);
+    if(mem_read != se_iter->mem_access_record.all_reads.end()){
+      se = &(*se_iter);
+      LOG(INFO) << fmt::format("se.pc = {:08X}",se_iter->pc);
+      break;
+    }
+
+  }
+
+
+  switch (opcode) {
+
+    case TlOpcode::Get: {
+      auto mem_read = se->mem_access_record.all_reads.find(addr);
+      CHECK_S(mem_read != se->mem_access_record.all_reads.end())
+              << fmt::format(": [{}] cannot find mem read of addr {:08X}", get_t(), addr);
+      CHECK_EQ_S(mem_read->second.size_by_byte, decode_size(size)) << fmt::format(
+            ": [{}] expect mem read of size {}, actual size {} (addr={:08X}, {})",
+            get_t(), mem_read->second.size_by_byte, 1 << decode_size(size), addr, se->describe_insn());
+
+      uint64_t data = mem_read->second.val;
+      LOG(INFO) << fmt::format("[{}] receive rtl mem get req (addr={}, size={}byte), should return data {}",
+                               get_t(), addr, decode_size(size), data);
+      tl_banks.emplace(std::make_pair(addr, TLReqRecord{
+          data, 1u << size, src, TLReqRecord::opType::Get, get_mem_req_cycles()
+      }));
+      mem_read->second.executed = true;
+      break;
+    }
+
+    case TlOpcode::PutFullData: {
+      uint32_t data = TL(a_bits_data);
+      LOG(INFO) << fmt::format("[{}] receive rtl mem put req (addr={:08X}, size={}byte, data={})",
+                               addr, decode_size(size), data);
+      auto mem_write = se->mem_access_record.all_writes.find(addr);
+
+      CHECK_S(mem_write != se->mem_access_record.all_writes.end())
+              << fmt::format(": [{}] cannot find mem write of addr={:08X}", get_t(), addr);
+      CHECK_EQ_S(mem_write->second.size_by_byte, decode_size(size)) << fmt::format(
+            ": [{}] expect mem write of size {}, actual size {} (addr={:08X}, insn='{}')",
+            get_t(), mem_write->second.size_by_byte, 1 << decode_size(size), addr, se->describe_insn());
+      CHECK_EQ_S(mem_write->second.val, data) << fmt::format(
+            ": [{}] expect mem write of data {}, actual data {} (addr={:08X}, insn='{}')",
+            get_t(), mem_write->second.size_by_byte, 1 << decode_size(size), addr, se->describe_insn());
+
+      tl_banks.emplace(std::make_pair(addr, TLReqRecord{
+          data, 1u << size, src, TLReqRecord::opType::PutFullData, get_mem_req_cycles()
+      }));
+      mem_write->second.executed = true;
+      break;
+    }
+    default: {
+      LOG(FATAL) << fmt::format("unknown tl opcode {}", opcode);
+    }
 #undef TL
-}*/
+  }
+}
 
 /*void VBridgeImpl::return_tl_response() {
 #define TL(i, name) (get_tl_##name(top, (i)))

@@ -22,6 +22,7 @@ std::string SpikeEvent::describe_insn() const {
 }*/
 
 void SpikeEvent::log_arch_changes() {
+  LOG(INFO) << fmt::format("log pc = {:08X}",pc);
   state_t *state = proc.get_state();
 
 //  for (auto [write_idx, data]: state->log_reg_write) {
