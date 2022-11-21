@@ -6,6 +6,7 @@
 #include "mmu.h"
 
 #include "VV.h"
+#include "VV___024root.h"
 #include "verilated_fst_c.h"
 
 #include "spike_event.h"

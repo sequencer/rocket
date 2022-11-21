@@ -62,6 +62,7 @@ void VBridgeImpl::reset() {
   top.eval();
   tfp.dump(2);
   // posedge
+  LOG(INFO) << fmt::format("Reset compeleted, now we start");
   top.reset = 0;
   top.clock = 1;
   top.eval();
@@ -119,8 +120,11 @@ void VBridgeImpl::run() {
   while (true) {
     loop_until_se_queue_full();
       top.eval();
+
+      top.memory_0_a_ready = 1;
       // negedge
-      // receive_tl_req();
+
+      receive_tl_req();
       top.clock = 0;
       top.eval();
       tfp.dump(2 * ctx.time());
@@ -189,9 +193,12 @@ std::optional<SpikeEvent> VBridgeImpl::create_spike_event(insn_fetch_t fetch) {
 }*/
 
 void VBridgeImpl::receive_tl_req() {
+  int miss = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__frontend__DOT__icache__DOT__s2_miss;
+  printf("s2_miss = %d\n",miss);
 #define TL(name) (get_tl_##name(top))
   if (!TL(a_valid)) return;
   // store A channel req
+
   uint8_t opcode = TL(a_bits_opcode);
   if (opcode == 4){
     LOG(INFO) << fmt::format("Find Mem req");
@@ -199,6 +206,11 @@ void VBridgeImpl::receive_tl_req() {
   uint32_t addr = TL(a_bits_address);
   uint8_t size = TL(a_bits_size);
   uint8_t src = TL(a_bits_source);   // MSHR id, TODO: be returned in D channel
+  // find icache refill request
+  if (miss){
+    LOG(INFO) << fmt::format("Find icache refill request for {:08X}",addr);
+    return;
+  }
   // find corresponding SpikeEvent
   SpikeEvent *se;
   for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
