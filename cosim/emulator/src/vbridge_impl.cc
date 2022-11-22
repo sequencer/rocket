@@ -119,6 +119,8 @@ void VBridgeImpl::run() {
   // start loop
   while (true) {
     loop_until_se_queue_full();
+      return_fetch_response();
+      top.clock = 1;
       top.eval();
 
       top.memory_0_a_ready = 1;
@@ -192,10 +194,15 @@ std::optional<SpikeEvent> VBridgeImpl::create_spike_event(insn_fetch_t fetch) {
   return se_to_issue;
 }*/
 
+
+
 void VBridgeImpl::receive_tl_req() {
   int miss = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__frontend__DOT__icache__DOT__s2_miss;
-  printf("s2_miss = %d\n",miss);
+  //printf("s2_miss = %d\n",miss);
+
+
 #define TL(name) (get_tl_##name(top))
+  int valid = TL(a_valid);
   if (!TL(a_valid)) return;
   // store A channel req
 
@@ -206,9 +213,21 @@ void VBridgeImpl::receive_tl_req() {
   uint32_t addr = TL(a_bits_address);
   uint8_t size = TL(a_bits_size);
   uint8_t src = TL(a_bits_source);   // MSHR id, TODO: be returned in D channel
-  // find icache refill request
+  // find icache refill request, fill fetch_banks
   if (miss){
-    LOG(INFO) << fmt::format("Find icache refill request for {:08X}",addr);
+    for(int i=0; i<8 ; i++){
+      uint64_t insn = 0;
+      for (int j = 0; j < 8; ++j) {
+        insn += (uint64_t) load(addr + j + i*8) << (j * 8);
+      }
+      LOG(INFO) << fmt::format("Find insn: {:08X} , at:{:08X}",insn,addr + i*8);
+      fetch_banks[i].data = insn;
+      fetch_banks[i].source = src;
+      fetch_banks[i].remaining = true;
+    }
+
+
+
     return;
   }
   // find corresponding SpikeEvent
@@ -271,6 +290,25 @@ void VBridgeImpl::receive_tl_req() {
     }
 #undef TL
   }
+}
+
+void VBridgeImpl::return_fetch_response(){
+#define TL(name) (get_tl_##name(top))
+  bool d_valid = false;
+  for (int i=0;i<8;i++){
+    if(fetch_banks[i].remaining){
+      fetch_banks[i].remaining = false;
+      LOG(INFO) << fmt::format("Fetch insn: {:08X}", fetch_banks[i].data);
+      TL(d_bits_opcode) = 1;
+      TL(d_bits_data) = fetch_banks[i].data;
+      TL(d_bits_source) = fetch_banks[i].source;
+      TL(d_bits_size) = 6;
+      d_valid = true;
+      break;
+    }
+  }
+  TL(d_valid) = d_valid;
+#undef TL
 }
 
 /*void VBridgeImpl::return_tl_response() {

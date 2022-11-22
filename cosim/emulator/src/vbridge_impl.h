@@ -30,6 +30,12 @@ struct TLReqRecord {
     TLReqRecord(uint64_t data, uint32_t size_by_byte, uint16_t source, opType op, int cycles) :
         data(data), size_by_byte(size_by_byte), source(source), op(op), remaining_cycles(cycles) {};
 };
+struct FetchRecord{
+    uint64_t data;
+    uint16_t source;
+    bool remaining;
+
+};
 
 
 class VBridgeImpl {
@@ -75,6 +81,7 @@ private:
   std::list<SpikeEvent> to_rtl_queue;
 
   std::map<reg_t, TLReqRecord> tl_banks;
+  FetchRecord fetch_banks[8];
 
   inline void reset();
 
@@ -90,6 +97,7 @@ private:
 
   void return_tl_response();
   void receive_tl_req();
+  void return_fetch_response();
 
   int get_mem_req_cycles() {
     return 1;

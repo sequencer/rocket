@@ -68,7 +68,7 @@ void SpikeEvent::log_arch_changes() {
     LOG(INFO) << fmt::format("spike detect mem write {:08X} on {:08X} with size={}byte", value, address, size_by_byte);
     mem_access_record.all_writes[address] = { .size_by_byte = size_by_byte, .val = value };
   }
-
+  // since log_mem_read doesn't record mem data, we need to load manually
   for (auto mem_read: state->log_mem_read) {
     uint64_t address = std::get<0>(mem_read);
     // Byte size_bytes
