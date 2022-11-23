@@ -8,6 +8,7 @@ import freechips.rocketchip.config.Parameters
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util._
+import org.chipsalliance.rocket.Operands.MEM.XA
 
 /* This adapter converts between diplomatic TileLink and non-diplomatic HellaCacheIO */
 class ScratchpadSlavePort(address: Seq[AddressSet], coreDataBytes: Int, usingAtomics: Boolean)(implicit p: Parameters) extends LazyModule {
@@ -60,16 +61,16 @@ class ScratchpadSlavePort(address: Seq[AddressSet], coreDataBytes: Int, usingAto
         TLMessages.PutFullData    -> M_XWR,
         TLMessages.PutPartialData -> M_PWR,
         TLMessages.ArithmeticData -> MuxLookup(a.param, Wire(M_XRD), Array(
-          TLAtomics.MIN           -> M_XA_MIN,
-          TLAtomics.MAX           -> M_XA_MAX,
-          TLAtomics.MINU          -> M_XA_MINU,
-          TLAtomics.MAXU          -> M_XA_MAXU,
-          TLAtomics.ADD           -> M_XA_ADD)),
+          TLAtomics.MIN           -> XA.MIN,
+          TLAtomics.MAX           -> XA.MAX,
+          TLAtomics.MINU          -> XA.MINU,
+          TLAtomics.MAXU          -> XA.MAXU,
+          TLAtomics.ADD           -> XA.ADD)),
         TLMessages.LogicalData    -> MuxLookup(a.param, Wire(M_XRD), Array(
-          TLAtomics.XOR           -> M_XA_XOR,
-          TLAtomics.OR            -> M_XA_OR,
-          TLAtomics.AND           -> M_XA_AND,
-          TLAtomics.SWAP          -> M_XA_SWAP)),
+          TLAtomics.XOR           -> XA.XOR,
+          TLAtomics.OR            -> XA.OR,
+          TLAtomics.AND           -> XA.AND,
+          TLAtomics.SWAP          -> XA.SWAP)),
         TLMessages.Get            -> M_XRD))
 
       // Convert full PutPartial into PutFull to work around RMWs causing X-prop problems.

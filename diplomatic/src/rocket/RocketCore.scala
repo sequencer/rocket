@@ -136,8 +136,8 @@ class Rocket(tile: RocketTile)(implicit p: Parameters) extends CoreModule()(p)
       ("jal", () => id_ctrl.jal),
       ("jalr", () => id_ctrl.jalr))
       ++ (if (!usingMulDiv) Seq() else Seq(
-        ("mul", () => if (pipelinedMul) id_ctrl.mul else id_ctrl.div && (id_ctrl.alu_fn & ALU.FN_DIV) =/= ALU.FN_DIV),
-        ("div", () => if (pipelinedMul) id_ctrl.div else id_ctrl.div && (id_ctrl.alu_fn & ALU.FN_DIV) === ALU.FN_DIV)))
+        ("mul", () => if (pipelinedMul) id_ctrl.mul else id_ctrl.div && (id_ctrl.alu_fn & Operands.ALU.DIV) =/= Operands.ALU.DIV),
+        ("div", () => if (pipelinedMul) id_ctrl.div else id_ctrl.div && (id_ctrl.alu_fn & Operands.ALU.DIV) === Operands.ALU.DIV)))
       ++ (if (!usingFPU) Seq() else Seq(
         ("fp load", () => id_ctrl.fp && io.fpu.dec.ldst && io.fpu.dec.wen),
         ("fp store", () => id_ctrl.fp && io.fpu.dec.ldst && !io.fpu.dec.wen),
@@ -396,7 +396,7 @@ class Rocket(tile: RocketTile)(implicit p: Parameters) extends CoreModule()(p)
     A2_IMM -> ex_imm,
     A2_SIZE -> Mux(ex_reg_rvc, SInt(2), SInt(4))))
 
-  val alu = Module(new ALU)
+  val alu = Module(new ALU(xLen))
   alu.io.dw := ex_ctrl.alu_dw
   alu.io.fn := ex_ctrl.alu_fn
   alu.io.in2 := ex_op2.asUInt
@@ -448,8 +448,8 @@ class Rocket(tile: RocketTile)(implicit p: Parameters) extends CoreModule()(p)
     when (id_ctrl.fence && id_fence_succ === 0) { id_reg_pause := true }
     when (id_fence_next) { id_reg_fence := true }
     when (id_xcpt) { // pass PC down ALU writeback pipeline for badaddr
-      ex_ctrl.alu_fn := ALU.FN_ADD
-      ex_ctrl.alu_dw := DW_XPR
+      ex_ctrl.alu_fn := Operands.ALU.ADD
+      ex_ctrl.alu_dw := Operands.DW.XPR
       ex_ctrl.sel_alu1 := A1_RS1 // badaddr := instruction
       ex_ctrl.sel_alu2 := A2_ZERO
       when (id_xcpt1.asUInt.orR) { // badaddr := PC+2

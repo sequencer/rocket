@@ -5,6 +5,7 @@ package org.chipsalliance.rocket.constants
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.util._
+import org.chipsalliance.rocket.Operands
 
 trait ScalarOpConstants {
   val SZ_BR = 3
@@ -40,12 +41,6 @@ trait ScalarOpConstants {
   def X = BitPat("b?")
   def N = BitPat("b0")
   def Y = BitPat("b1")
-
-  val SZ_DW = 1
-  def DW_X  = X
-  def DW_32 = false.B
-  def DW_64 = true.B
-  def DW_XPR = DW_64
 }
 
 trait MemoryOpConstants {
@@ -56,18 +51,9 @@ trait MemoryOpConstants {
   def M_XWR     = "b00001".U; // int store
   def M_PFR     = "b00010".U; // prefetch with intent to read
   def M_PFW     = "b00011".U; // prefetch with intent to write
-  def M_XA_SWAP = "b00100".U
   def M_FLUSH_ALL = "b00101".U  // flush all lines
   def M_XLR     = "b00110".U
   def M_XSC     = "b00111".U
-  def M_XA_ADD  = "b01000".U
-  def M_XA_XOR  = "b01001".U
-  def M_XA_OR   = "b01010".U
-  def M_XA_AND  = "b01011".U
-  def M_XA_MIN  = "b01100".U
-  def M_XA_MAX  = "b01101".U
-  def M_XA_MINU = "b01110".U
-  def M_XA_MAXU = "b01111".U
   def M_FLUSH   = "b10000".U // write back dirty data and cede R/W permissions
   def M_PWR     = "b10001".U // partial (masked) store
   def M_PRODUCE = "b10010".U // write back dirty data and cede W permissions
@@ -78,8 +64,8 @@ trait MemoryOpConstants {
   def M_WOK     = "b10111".U // check write permissions but don't perform a write
   def M_HLVX    = "b10000".U // HLVX instruction
 
-  def isAMOLogical(cmd: UInt) = cmd.isOneOf(M_XA_SWAP, M_XA_XOR, M_XA_OR, M_XA_AND)
-  def isAMOArithmetic(cmd: UInt) = cmd.isOneOf(M_XA_ADD, M_XA_MIN, M_XA_MAX, M_XA_MINU, M_XA_MAXU)
+  def isAMOLogical(cmd: UInt) = cmd.isOneOf(Operands.MEM.XA.SWAP, Operands.MEM.XA.XOR, Operands.MEM.XA.OR, Operands.MEM.XA.AND)
+  def isAMOArithmetic(cmd: UInt) = cmd.isOneOf(Operands.MEM.XA.ADD, Operands.MEM.XA.MIN, Operands.MEM.XA.MAX, Operands.MEM.XA.MINU, Operands.MEM.XA.MAXU)
   def isAMO(cmd: UInt) = isAMOLogical(cmd) || isAMOArithmetic(cmd)
   def isPrefetch(cmd: UInt) = cmd === M_PFR || cmd === M_PFW
   def isRead(cmd: UInt) = cmd.isOneOf(M_XRD, M_HLVX, M_XLR, M_XSC) || isAMO(cmd)
