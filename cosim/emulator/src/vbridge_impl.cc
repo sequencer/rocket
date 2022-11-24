@@ -21,11 +21,11 @@ inline uint32_t decode_size(uint32_t encoded_size) {
 
 VBridgeImpl::VBridgeImpl() :
     sim(1 << 30),
-    isa("rv32gc", "M"),
+    isa("rv64gc", "M"),
     _cycles(100),
     proc(
         /*isa*/ &isa,
-        /*varch*/ fmt::format("vlen:{},elen:{}", 0, 0).c_str(),
+        /*varch*/ fmt::format("").c_str(),
         /*sim*/ &sim,
         /*id*/ 0,
         /*halt on reset*/ true,
@@ -119,6 +119,7 @@ void VBridgeImpl::run() {
   // start loop
   while (true) {
     loop_until_se_queue_full();
+    while(!to_rtl_queue.empty()){
       return_fetch_response();
       top.clock = 1;
       top.eval();
@@ -137,10 +138,16 @@ void VBridgeImpl::run() {
       top.eval();
       tfp.dump(2 * ctx.time() - 1);
 
+      if(top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_valid){
+        // LOG(INFO) << fmt::format("Queue pop insn at: {:08X} ",to_rtl_queue.back().pc);
+        LOG(INFO) << fmt::format("insn commit: {:08X} ",top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_reg_pc);
+        to_rtl_queue.pop_back();
+      }
+
       if (get_t() >= timeout) {
         throw TimeoutException();
       }
-
+    }
     }
   }
 
@@ -148,6 +155,7 @@ void VBridgeImpl::loop_until_se_queue_full() {
   while (to_rtl_queue.size() < to_rtl_queue_size) {
     try {
       if (auto spike_event = spike_step()) {
+        LOG(INFO) << fmt::format("insert se pc = {:08X}.", spike_event->pc);
         SpikeEvent &se = spike_event.value();
         to_rtl_queue.push_front(std::move(se));
       }
@@ -169,7 +177,9 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
   auto &se = event.value();
   // now event always exists,just func
   // todo: detail ?
+  LOG(INFO) << fmt::format("spike commit pc = {:08X},data = {:08X}",state->pc,se.inst_bits);
   state->pc = fetch.func(&proc, fetch.insn, state->pc);
+
   se.log_arch_changes();
 
 
@@ -208,7 +218,7 @@ void VBridgeImpl::receive_tl_req() {
 
   uint8_t opcode = TL(a_bits_opcode);
   if (opcode == 4){
-    LOG(INFO) << fmt::format("Find Mem req");
+    // LOG(INFO) << fmt::format("Find Mem req");
   }
   uint32_t addr = TL(a_bits_address);
   uint8_t size = TL(a_bits_size);
@@ -220,7 +230,7 @@ void VBridgeImpl::receive_tl_req() {
       for (int j = 0; j < 8; ++j) {
         insn += (uint64_t) load(addr + j + i*8) << (j * 8);
       }
-      LOG(INFO) << fmt::format("Find insn: {:08X} , at:{:08X}",insn,addr + i*8);
+      //LOG(INFO) << fmt::format("Find insn: {:08X} , at:{:08X}",insn,addr + i*8);
       fetch_banks[i].data = insn;
       fetch_banks[i].source = src;
       fetch_banks[i].remaining = true;
@@ -298,7 +308,7 @@ void VBridgeImpl::return_fetch_response(){
   for (int i=0;i<8;i++){
     if(fetch_banks[i].remaining){
       fetch_banks[i].remaining = false;
-      LOG(INFO) << fmt::format("Fetch insn: {:08X}", fetch_banks[i].data);
+      // LOG(INFO) << fmt::format("Fetch insn: {:08X}", fetch_banks[i].data);
       TL(d_bits_opcode) = 1;
       TL(d_bits_data) = fetch_banks[i].data;
       TL(d_bits_source) = fetch_banks[i].source;

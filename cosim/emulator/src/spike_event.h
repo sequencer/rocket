@@ -50,9 +50,14 @@ struct SpikeEvent {
   uint32_t inst_bits;
 
   // scalar to vector interface(used for driver)
-/*  uint32_t rs1_bits;
+  uint32_t rs1_bits;
   uint32_t rs2_bits;
-  uint32_t rd_idx;*/
+  // rd idx and bits before insn
+  uint32_t rd_idx;
+  uint64_t rd_old_bits;
+  // rd idx and bits after insn
+  uint64_t rd_new_bits;
+  bool is_rd_written;
 
   // vtype
   /*uint32_t vsew: 3;
@@ -79,8 +84,7 @@ struct SpikeEvent {
     std::unique_ptr<uint8_t[]> vd_bytes;
   } vd_write_record;*/
 
-  /*bool is_rd_written;
-  uint32_t rd_bits;*/
+
 
   struct {
     struct single_mem_write {

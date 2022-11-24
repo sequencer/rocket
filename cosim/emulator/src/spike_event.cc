@@ -22,16 +22,16 @@ std::string SpikeEvent::describe_insn() const {
 }*/
 
 void SpikeEvent::log_arch_changes() {
-  LOG(INFO) << fmt::format("log pc = {:08X}",pc);
+  //LOG(INFO) << fmt::format("log pc = {:08X}",pc);
   state_t *state = proc.get_state();
 
-//  for (auto [write_idx, data]: state->log_reg_write) {
-//    // in spike, log_reg_write is arrange:
-//    // xx0000 <- x
-//    // xx0001 <- f
-//    // xx0010 <- vreg
-//    // xx0011 <- vec
-//    // xx0100 <- csr
+  for (auto [write_idx, data]: state->log_reg_write) {
+    // in spike, log_reg_write is arrange:
+    // xx0000 <- x
+    // xx0001 <- f
+    // xx0010 <- vreg
+    // xx0011 <- vec
+    // xx0100 <- csr
 //    if ((write_idx & 0xf) == 0b0010) {  // vreg
 //      auto vd = (write_idx >> 4);
 //      CHECK_EQ_S(vd, rd_idx) << fmt::format("expect to write vrf[{}], detect writing vrf[{}]", rd_idx, vd);
@@ -48,17 +48,23 @@ void SpikeEvent::log_arch_changes() {
 //        }
 //      }
 //
-//    } else if ((write_idx & 0xf) == 0b0000) {  // scalar rf
-//      uint32_t new_rd_bits = proc.get_state()->XPR[rd_idx];
-//      if (new_rd_bits != rd_bits) {
-//        rd_bits = new_rd_bits;
-//        is_rd_written = true;
-//        LOG(INFO) << fmt::format("spike detect scalar rf change: x[{}] from {} to {}", rd_idx, rd_bits, new_rd_bits);
-//      }
-//    } else {
-//      LOG(INFO) << fmt::format("spike detect unknown reg change (idx = {:08X})", write_idx);
 //    }
-//  }
+    if ((write_idx & 0xf) == 0b0000) {  // scalar rf
+      //LOG(INFO) << fmt::format("idx = {:08X} data = {:08X}", rd_idx, rd_bits);
+      uint32_t new_rd_bits = proc.get_state()->XPR[rd_idx];
+      if (rd_new_bits != new_rd_bits ) {
+        rd_new_bits = new_rd_bits;
+        is_rd_written = true;
+        LOG(INFO) << fmt::format("spike detect scalar rf change: x[{}] from {:08X} to {:08X}", rd_idx, rd_old_bits, rd_new_bits);
+      }
+    }
+//    else if((write_idx & 0xf) == 0b0100){
+//        LOG(INFO) << fmt::format("spike detect csr change: idx={:08X}", write_idx);
+//    }
+//    else {
+//        LOG(INFO) << fmt::format("spike detect unknown reg change (idx = {:08X})", write_idx);
+//    }
+  }
 
   for (auto mem_write: state->log_mem_write) {
     uint64_t address = std::get<0>(mem_write);
@@ -88,6 +94,10 @@ void SpikeEvent::log_arch_changes() {
 
 SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl): proc(proc), impl(impl) {
   auto &xr = proc.get_state()->XPR;
+  rs1_bits = xr[fetch.insn.rs1()];
+  rs2_bits = xr[fetch.insn.rs2()];
+  rd_idx = fetch.insn.rd();
+  rd_old_bits = proc.get_state()->XPR[rd_idx];
 
   pc = proc.get_state()->pc;
   inst_bits = fetch.insn.bits();
