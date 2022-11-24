@@ -99,6 +99,7 @@ private:
   void receive_tl_req();
   void return_fetch_response();
 
+  void record_rf_access();
   int get_mem_req_cycles() {
     return 1;
   };

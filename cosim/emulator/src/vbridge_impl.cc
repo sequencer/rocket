@@ -140,6 +140,7 @@ void VBridgeImpl::run() {
 
       if(top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_valid){
         // LOG(INFO) << fmt::format("Queue pop insn at: {:08X} ",to_rtl_queue.back().pc);
+         record_rf_access();
         LOG(INFO) << fmt::format("insn commit: {:08X} ",top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_reg_pc);
         to_rtl_queue.pop_back();
       }
@@ -177,7 +178,6 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
   auto &se = event.value();
   // now event always exists,just func
   // todo: detail ?
-  LOG(INFO) << fmt::format("spike commit pc = {:08X},data = {:08X}",state->pc,se.inst_bits);
   state->pc = fetch.func(&proc, fetch.insn, state->pc);
 
   se.log_arch_changes();
@@ -192,26 +192,28 @@ std::optional<SpikeEvent> VBridgeImpl::create_spike_event(insn_fetch_t fetch) {
   return SpikeEvent{proc, fetch, this};
 }
 
-/*SpikeEvent *VBridgeImpl::find_se_to_issue() {
-  SpikeEvent *se_to_issue = nullptr;
-  for (auto iter = to_rtl_queue.rbegin(); iter != to_rtl_queue.rend(); iter++) {
-    if (!iter->is_issued) {
-      se_to_issue = &(*iter);
+void VBridgeImpl::record_rf_access() {
+  // peek rtl rf access
+  auto waddr =  top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__rf_waddr;
+  auto wdata =  top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__rf_wdata;
+  // find spike event
+  SpikeEvent *se;
+  for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
+    if (se_iter->rd_idx == waddr) {
+      se = &(*se_iter);
       break;
     }
+     LOG(FATAL) << fmt::format("Cannot find SpikeEvent with rf idx {:08X}",waddr);
   }
-  CHECK(se_to_issue) << fmt::format("[{}] all events in to_rtl_queue are is_issued", get_t());  // TODO: handle this
-  return se_to_issue;
-}*/
+  // start to diff
+  CHECK_EQ_S(wdata,se->rd_new_bits) << fmt::format("Byte {:08X} incorrect for rf write, rtl data = {:08X} but Spike write {:08X}",waddr,wdata,se->rd_old_bits);
 
+}
 
 
 void VBridgeImpl::receive_tl_req() {
-  int miss = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__frontend__DOT__icache__DOT__s2_miss;
-  //printf("s2_miss = %d\n",miss);
-
-
 #define TL(name) (get_tl_##name(top))
+  int miss = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__frontend__DOT__icache__DOT__s2_miss;
   int valid = TL(a_valid);
   if (!TL(a_valid)) return;
   // store A channel req
@@ -296,7 +298,7 @@ void VBridgeImpl::receive_tl_req() {
       break;
     }
     default: {
-      LOG(FATAL) << fmt::format("unknown tl opcode {}", opcode);
+      LOG(INFO) << fmt::format("unknown tl opcode {}", opcode);
     }
 #undef TL
   }
@@ -321,38 +323,38 @@ void VBridgeImpl::return_fetch_response(){
 #undef TL
 }
 
-/*void VBridgeImpl::return_tl_response() {
-#define TL(i, name) (get_tl_##name(top, (i)))
-  for (int i = 0; i < consts::numTL; i++) {
-    // update remaining_cycles
-    for (auto &[addr, record]: tl_banks[i]) {
-      if (record.remaining_cycles > 0) record.remaining_cycles--;
-    }
-
-    // find a finished request and return
-    bool d_valid = false;
-    for (auto &[addr, record]: tl_banks[i]) {
-      if (record.remaining_cycles == 0) {
-        TL(i, d_bits_opcode) = record.op == TLReqRecord::opType::Get ? TlOpcode::AccessAckData : TlOpcode::AccessAck;
-        TL(i, d_bits_data) = record.data;
-        TL(i, d_bits_sink) = record.source;
-        d_valid = true;
-        record.op = TLReqRecord::opType::Nil;
-        break;
-      }
-    }
-    TL(i, d_valid) = d_valid;
-
-    // collect garbage
-    erase_if(tl_banks[i], [](const auto &record) {
-        return record.second.op == TLReqRecord::opType::Nil;
-    });
-
-    // welcome new requests all the time
-    TL(i, a_ready) = true;
-  }
-#undef TL
-}*/
+//void VBridgeImpl::return_tl_response() {
+//#define TL(i, name) (get_tl_##name(top, (i)))
+//  for (int i = 0; i < consts::numTL; i++) {
+//    // update remaining_cycles
+//    for (auto &[addr, record]: tl_banks[i]) {
+//      if (record.remaining_cycles > 0) record.remaining_cycles--;
+//    }
+//
+//    // find a finished request and return
+//    bool d_valid = false;
+//    for (auto &[addr, record]: tl_banks[i]) {
+//      if (record.remaining_cycles == 0) {
+//        TL(i, d_bits_opcode) = record.op == TLReqRecord::opType::Get ? TlOpcode::AccessAckData : TlOpcode::AccessAck;
+//        TL(i, d_bits_data) = record.data;
+//        TL(i, d_bits_sink) = record.source;
+//        d_valid = true;
+//        record.op = TLReqRecord::opType::Nil;
+//        break;
+//      }
+//    }
+//    TL(i, d_valid) = d_valid;
+//
+//    // collect garbage
+//    erase_if(tl_banks[i], [](const auto &record) {
+//        return record.second.op == TLReqRecord::opType::Nil;
+//    });
+//
+//    // welcome new requests all the time
+//    TL(i, a_ready) = true;
+//  }
+//#undef TL
+//}
 
 
 
