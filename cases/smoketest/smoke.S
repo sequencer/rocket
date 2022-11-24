@@ -1,15 +1,14 @@
 .global _start
 _start:
-    add x1, x1, 1
-    add x1, x1, 2
-    add x1, x1, 3
-    add x1, x1, 4
-    add x1, x1, 5
-    add x1, x1, 6
-    add x1, x1, 7
-    add x1, x1, 8
-    add x1, x1, 9
-    add x1, x1, 10
-    add x1, x1, 1
-    add x1, x1, 1
+    addi t0, x0, 0x1
+    addi t1, x0, 0x0
+    addi t3, x0, 0xa
+loop:
+    add t1, t1, t0
+    add t0, t0, 0x1
+    add t3, t3, -1
+    bne t3, x0, loop
+    nop
+    jr ra
+    nop
 
