@@ -68,22 +68,49 @@ void SpikeEvent::log_arch_changes() {
 
   for (auto mem_write: state->log_mem_write) {
     uint64_t address = std::get<0>(mem_write);
+    uint64_t write_addr = address & 0xC0;
     uint64_t value = std::get<1>(mem_write);
     // Byte size_bytes
     uint8_t size_by_byte = std::get<2>(mem_write);
-    LOG(INFO) << fmt::format("spike detect mem write {:08X} on {:08X} with size={}byte", value, address, size_by_byte);
+    // record mem block for cache
+    for(int i=0; i<8 ; i++){
+      uint64_t data = 0;
+      //scan 8 bytes to data
+      for (int j = 0; j < 8; ++j) {
+        data += (uint64_t) impl->load(write_addr + j + i*8) << (j * 8);
+      }
+      //LOG(INFO) << fmt::format("Find insn: {:08X} , at:{:08X}",insn,addr + i*8);
+      block.blocks[i] = data;
+      block.addr = write_addr;
+      block.remaining = true;
+    }
+    LOG(INFO) << fmt::format("spike detect mem write {:08X} on mem:{:08X} with size={}byte; block_addr={:08X}", value, address, size_by_byte,write_addr);
     mem_access_record.all_writes[address] = { .size_by_byte = size_by_byte, .val = value };
   }
   // since log_mem_read doesn't record mem data, we need to load manually
   for (auto mem_read: state->log_mem_read) {
     uint64_t address = std::get<0>(mem_read);
+    uint64_t read_addr = address & 0xC0;
     // Byte size_bytes
     uint8_t size_by_byte = std::get<2>(mem_read);
     uint64_t value = 0;
+    // record mem target
     for (int i = 0; i < size_by_byte; ++i) {
       value += (uint64_t) impl->load(address + i) << (i * 8);
     }
-    LOG(INFO) << fmt::format("spike detect mem read {:08X} on {:08X} with size={}byte", value, address, size_by_byte);
+    // record mem block for cache
+    for(int i=0; i<8 ; i++){
+      uint64_t data = 0;
+      //scan 8 bytes to data
+      for (int j = 0; j < 8; ++j) {
+        data += (uint64_t) impl->load(read_addr + j + i*8) << (j * 8);
+      }
+      //LOG(INFO) << fmt::format("Find insn: {:08X} , at:{:08X}",insn,addr + i*8);
+      block.blocks[i] = data;
+      block.addr = read_addr;
+      block.remaining = true;
+    }
+    LOG(INFO) << fmt::format("spike detect mem read {:08X} on mem:{:08X} with size={}byte; block_addr={:08X}", value, address, size_by_byte,read_addr);
     mem_access_record.all_reads[address] = { .size_by_byte = size_by_byte, .val = value };
   }
 
@@ -107,6 +134,7 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
 
   is_issued = false;
   is_committed = false;
+
 
 }
 

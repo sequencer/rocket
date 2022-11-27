@@ -15,6 +15,12 @@
 
 class VBridgeImpl;
 
+struct Cacheblock{
+    uint64_t addr;
+    uint64_t blocks[8];
+    bool remaining;
+};
+
 struct SpikeEvent {
   SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl);
 
@@ -58,6 +64,13 @@ struct SpikeEvent {
   // rd idx and bits after insn
   uint64_t rd_new_bits;
   bool is_rd_written;
+
+
+  Cacheblock block;
+
+
+
+
 
   // vtype
   /*uint32_t vsew: 3;

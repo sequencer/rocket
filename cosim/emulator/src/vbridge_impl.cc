@@ -120,6 +120,7 @@ void VBridgeImpl::run() {
   while (true) {
     loop_until_se_queue_full();
     while(!to_rtl_queue.empty()){
+      return_fetch_response();
 
       top.clock = 1;
       top.eval();
@@ -141,12 +142,13 @@ void VBridgeImpl::run() {
       top.eval();
       tfp.dump(2 * ctx.time() - 1);
 
-      return_fetch_response();
+
       // when wb
       if(top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_valid){
 
         uint64_t pc = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_reg_pc;
-        LOG(INFO) << fmt::format("WB insn {:08X} ",pc);
+        //LOG(INFO) << fmt::format("WB insn {:08X} ",pc);
+
         // Check rf write
         // todo: use rf_valid
         if(top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_wen){
@@ -156,7 +158,7 @@ void VBridgeImpl::run() {
         for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
           if(se_iter->pc == pc){
             se_iter->is_committed = true;
-            LOG(INFO) << fmt::format("SE set pc = {:08X} as committed",se_iter->pc);
+            LOG(INFO) << fmt::format("Set spike{:08X} as committed",se_iter->pc);
             break;
           }
         }
@@ -293,7 +295,7 @@ void VBridgeImpl::receive_tl_req() {
     auto mem_read = se_iter->mem_access_record.all_reads.find(addr);
     if(mem_read != se_iter->mem_access_record.all_reads.end()){
       se = &(*se_iter);
-      LOG(INFO) << fmt::format("se.pc = {:08X}",se_iter->pc);
+      LOG(INFO) << fmt::format("success se.pc = {:08X}",se_iter->pc);
       break;
     }
 
@@ -384,6 +386,7 @@ void VBridgeImpl::receive_tl_req() {
 //#undef TL
 //}
 
+// for grantData, need to delay 1 cycle , or the d_ready will go low
 void VBridgeImpl::return_fetch_response() {
 #define TL(name) (get_tl_##name(top))
   bool fetch_valid = false;
