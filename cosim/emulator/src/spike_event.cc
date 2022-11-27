@@ -22,7 +22,7 @@ std::string SpikeEvent::describe_insn() const {
 }*/
 
 void SpikeEvent::log_arch_changes() {
-  //LOG(INFO) << fmt::format("log pc = {:08X}",pc);
+
   state_t *state = proc.get_state();
 
   for (auto [write_idx, data]: state->log_reg_write) {
@@ -55,7 +55,7 @@ void SpikeEvent::log_arch_changes() {
       if (rd_new_bits != new_rd_bits ) {
         rd_new_bits = new_rd_bits;
         is_rd_written = true;
-        LOG(INFO) << fmt::format("spike detect scalar rf change: x[{}] from {:08X} to {:08X}", rd_idx, rd_old_bits, rd_new_bits);
+        LOG(INFO) << fmt::format("Insert Spike {:08X} with scalar rf change: x[{}] from {:08X} to {:08X}", pc, rd_idx, rd_old_bits, rd_new_bits);
       }
     }
 //    else if((write_idx & 0xf) == 0b0100){
@@ -103,7 +103,7 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
   inst_bits = fetch.insn.bits();
   uint32_t opcode = clip(inst_bits, 0, 6);
   is_load = opcode == 0b111;
-  is_store = opcode == 0b100111;
+  is_store = opcode == 0b100011;
 
   is_issued = false;
   is_committed = false;
