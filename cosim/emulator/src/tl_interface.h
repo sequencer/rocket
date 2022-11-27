@@ -2,6 +2,7 @@
 
 namespace TlOpcode {
   constexpr int
+  AcquireBlock = 6,
   Get = 4,
   AccessAckData = 1,
   PutFullData = 0,

@@ -8,7 +8,13 @@ loop:
     add t0, t0, 0x1
     add t3, t3, -1
     bne t3, x0, loop
+    sd t1, 0x10(x0)
+    ld t2, 0x10(x0)
     nop
-    jr ra
     nop
+    nop
+    nop
+    nop
+
+
 

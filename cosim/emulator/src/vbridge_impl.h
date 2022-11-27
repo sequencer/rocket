@@ -34,7 +34,12 @@ struct FetchRecord{
     uint64_t data;
     uint16_t source;
     bool remaining;
-
+};
+struct AquireRecord{
+    uint64_t data;
+    uint16_t param;
+    uint16_t source;
+    bool remaining;
 };
 
 
@@ -82,6 +87,7 @@ private:
 
   std::map<reg_t, TLReqRecord> tl_banks;
   FetchRecord fetch_banks[8];
+  AquireRecord aquire_banks[8];
 
   inline void reset();
 
@@ -98,6 +104,8 @@ private:
   void return_tl_response();
   void receive_tl_req();
   void return_fetch_response();
+  void return_acquire_response();
+  int cnt;
 
   void record_rf_access();
   int get_mem_req_cycles() {
