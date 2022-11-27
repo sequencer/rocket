@@ -10,11 +10,12 @@ loop:
     bne t3, x0, loop
     sd t1, 0x10(x0)
     ld t2, 0x10(x0)
-    nop
-    nop
-    nop
-    nop
-    nop
+    addi x20, x0, 0x1
+    addi x21, x0, 0x1
+    addi x22, x0, 0x1
+    addi x23, x0, 0x1
+    addi x24, x0, 0x1
+    addi x25, x0, 0x1
 
 
 

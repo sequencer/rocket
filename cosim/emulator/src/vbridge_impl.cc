@@ -109,6 +109,12 @@ uint8_t VBridgeImpl::load(uint64_t address){
   return *sim.addr_to_mem(address);
 }
 
+/*
+ * For TL Acquire
+ * Record mem info in se.block when init spike event;
+ * receive tl Acquire, find corresponding SE in queue. store se.block info in AcquireBanks;set AcquireBanks.remaining as true;
+ * return: drive D channel with AcquireBanks
+ * */
 void VBridgeImpl::run() {
 
   init_spike();
@@ -143,7 +149,7 @@ void VBridgeImpl::run() {
       tfp.dump(2 * ctx.time() - 1);
 
 
-      // when wb
+      // when wb_valid set spike event as commit
       if(top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_valid){
 
         uint64_t pc = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_reg_pc;
@@ -158,7 +164,7 @@ void VBridgeImpl::run() {
         for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
           if(se_iter->pc == pc){
             se_iter->is_committed = true;
-            LOG(INFO) << fmt::format("Set spike{:08X} as committed",se_iter->pc);
+            LOG(INFO) << fmt::format("Set spike {:08X} as committed",se_iter->pc);
             break;
           }
         }
@@ -291,15 +297,22 @@ void VBridgeImpl::receive_tl_req() {
   // find corresponding SpikeEvent
   SpikeEvent *se;
   for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-
-    auto mem_read = se_iter->mem_access_record.all_reads.find(addr);
-    if(mem_read != se_iter->mem_access_record.all_reads.end()){
+    if(addr == se_iter->block.addr){
       se = &(*se_iter);
-      LOG(INFO) << fmt::format("success se.pc = {:08X}",se_iter->pc);
+      LOG(INFO) << fmt::format("success find acqure Spike pc = {:08X}",se_iter->pc);
       break;
     }
-
   }
+//  for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
+//
+//    auto mem_read = se_iter->mem_access_record.all_reads.find(addr);
+//    if(mem_read != se_iter->mem_access_record.all_reads.end()){
+//      se = &(*se_iter);
+//      LOG(INFO) << fmt::format("success se.pc = {:08X}",se_iter->pc);
+//      break;
+//    }
+//
+//  }
 
 
   switch (opcode) {
@@ -353,8 +366,8 @@ void VBridgeImpl::receive_tl_req() {
           data += (uint64_t) load(addr + j + i*8) << (j * 8);
         }
         //LOG(INFO) << fmt::format("Find insn: {:08X} , at:{:08X}",insn,addr + i*8);
-        aquire_banks[i].data = 0;
-        aquire_banks[i].param = 0;
+        aquire_banks[i].data = se->block.blocks[i];
+        aquire_banks[i].param = param;
         aquire_banks[i].source = src;
         aquire_banks[i].remaining = true;
       }
@@ -403,9 +416,9 @@ void VBridgeImpl::return_fetch_response() {
       aquire_bank.remaining = false;
       // LOG(INFO) << fmt::format("Fetch insn: {:08X}", fetch_banks[i].data);
       TL(d_bits_opcode) = 5;
-      TL(d_bits_data) = 0;
+      TL(d_bits_data) = aquire_bank.data;
       source = aquire_bank.source;
-      TL(d_bits_param) = aquire_bank.param;
+      TL(d_bits_param) = 0;
       size = 6;
       aqu_valid = true;
       break;
