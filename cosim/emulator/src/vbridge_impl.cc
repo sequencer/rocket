@@ -81,8 +81,7 @@ void VBridgeImpl::configure_simulator(int argc, char **argv) {
 void VBridgeImpl::init_spike() {
   // reset spike CPU
   proc.reset();
-  // TODO: remove this line, and use CSR write in the test code to enable this the VS field.
-  proc.get_state()->sstatus->write(proc.get_state()->sstatus->read() | SSTATUS_VS);
+
   // load binary to reset_vector
   sim.load(bin, reset_vector);
 }
@@ -153,7 +152,7 @@ void VBridgeImpl::run() {
       if(top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_valid){
 
         uint64_t pc = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_reg_pc;
-        //LOG(INFO) << fmt::format("WB insn {:08X} ",pc);
+        LOG(INFO) << fmt::format("WB insn {:08X} ",pc);
 
         // Check rf write
         // todo: use rf_valid
@@ -165,14 +164,21 @@ void VBridgeImpl::run() {
           if(se_iter->pc == pc){
             se_iter->is_committed = true;
             LOG(INFO) << fmt::format("Set spike {:08X} as committed",se_iter->pc);
+            if (se_iter -> is_csr) continue;
             break;
           }
+        }
+        //debug
+        LOG(INFO) << fmt::format("List all the queue after commit");
+        for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
+          //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
+          LOG(INFO) << fmt::format("spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
         }
 
         // pop
         for(int i = 0;i<5;i++){
           if(to_rtl_queue.back().is_committed){
-            LOG(INFO) << fmt::format("pop SE pc = {:08X} ",to_rtl_queue.back().pc);
+            LOG(INFO) << fmt::format("Pop SE pc = {:08X} ",to_rtl_queue.back().pc);
             to_rtl_queue.pop_back();
           }
         }
@@ -213,7 +219,16 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
   auto &se = event.value();
   // now event always exists,just func
   // todo: detail ?
-  state->pc = fetch.func(&proc, fetch.insn, state->pc);
+  LOG(INFO) << fmt::format("Spike func before pc={:08X} insn = {:08X}",state->pc,fetch.insn.bits());
+  reg_t pc = fetch.func(&proc, fetch.insn, state->pc);
+  // Bypass CSR insns commitlog stuff.
+  if (!invalid_pc(pc)) {
+    state->pc = pc;
+  } else if (pc == PC_SERIALIZE_BEFORE) {
+    // CSRs are in a well-defined state.
+    state->serialized = true;
+  }
+  LOG(INFO) << fmt::format("Spike func after pc={:08X} ",state->pc);
 
   se.log_arch_changes();
 
@@ -236,11 +251,11 @@ void VBridgeImpl::record_rf_access() {
   LOG(INFO) << fmt::format("RTL wirte reg({}) = {:08X}, pc = {:08X}",waddr,wdata,pc);
 
 
-//  LOG(INFO) << fmt::format("List all the queue");
-//  for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-//    //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
-//    LOG(INFO) << fmt::format("spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
-//  }
+  LOG(INFO) << fmt::format("List all the queue");
+  for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
+    //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
+    LOG(INFO) << fmt::format("spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
+  }
 
   // find spike event
   SpikeEvent *se = nullptr;
@@ -257,7 +272,7 @@ void VBridgeImpl::record_rf_access() {
   // start to diff
   // for non-store ins. check rf write
   if(!(se->is_store)){
-    //CHECK_EQ_S(wdata,se->rd_new_bits) << fmt::format("\n For Reg({}) rtl write {:08X} but Spike write {:08X}",waddr,wdata,se->rd_new_bits);
+    CHECK_EQ_S(wdata,se->rd_new_bits) << fmt::format("\n For Reg({}) rtl write {:08X} but Spike write {:08X}",waddr,wdata,se->rd_new_bits);
   } else {
     LOG(INFO) << fmt::format("Find Store insn");
   }
@@ -287,7 +302,7 @@ void VBridgeImpl::receive_tl_req() {
       for (int j = 0; j < 8; ++j) {
         insn += (uint64_t) load(addr + j + i*8) << (j * 8);
       }
-      //LOG(INFO) << fmt::format("Find insn: {:08X} , at:{:08X}",insn,addr + i*8);
+      //LOG(INFO) << fmt::format("Fetch insn: {:08X} , at:{:08X}",insn,addr + i*8);
       fetch_banks[i].data = insn;
       fetch_banks[i].source = src;
       fetch_banks[i].remaining = true;

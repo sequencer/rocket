@@ -31,6 +31,12 @@ test:
 	#rm -rf out/cosim/emulator
 	#rm -rf out/mytests
 	#mill mytests.smoketest --cycles 100
+show:
+	riscv64-elf-objdump -Dzr out/mycases/cases/riscvtests/rv64mi-p/rv64mi-p-csr | less
+
+jump:
+	riscv64-elf-objdump -Dzr out/cases/jump/compile.dest/jump.elf | less
+
 
 clean:
 	git clean -fd

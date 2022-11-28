@@ -51,11 +51,11 @@ void SpikeEvent::log_arch_changes() {
 //    }
     if ((write_idx & 0xf) == 0b0000) {  // scalar rf
       //LOG(INFO) << fmt::format("idx = {:08X} data = {:08X}", rd_idx, rd_bits);
-      uint32_t new_rd_bits = proc.get_state()->XPR[rd_idx];
-      if (rd_new_bits != new_rd_bits ) {
-        rd_new_bits = new_rd_bits;
+      uint64_t rd_should_be_bits = proc.get_state()->XPR[rd_idx];
+      if (rd_new_bits != rd_should_be_bits ) {
+        rd_new_bits = rd_should_be_bits;
         is_rd_written = true;
-        LOG(INFO) << fmt::format("Insert Spike {:08X} with scalar rf change: x[{}] from {:08X} to {:08X}", pc, rd_idx, rd_old_bits, rd_new_bits);
+        LOG(INFO) << fmt::format("Log Spike {:08X} with scalar rf change: x[{}] from {:08X} to {:08X}", pc, rd_idx, rd_old_bits, rd_new_bits);
       }
     }
 //    else if((write_idx & 0xf) == 0b0100){
@@ -131,6 +131,7 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
   uint32_t opcode = clip(inst_bits, 0, 6);
   is_load = opcode == 0b111;
   is_store = opcode == 0b100011;
+  is_csr = opcode == 0b1110011;
 
   is_issued = false;
   is_committed = false;

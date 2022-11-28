@@ -258,6 +258,143 @@ object cases extends Module {
     }
   }
   object smoketest extends Case
+
+  object jump extends Case
+}
+
+object mycases extends Module{
+  object cases extends Module {
+    c =>
+    trait Suite extends Module {
+      def name: T[String]
+
+      def description: T[String]
+
+      def binaries: T[Seq[PathRef]]
+    }
+
+    object riscvtests extends Module {
+      trait Suite extends c.Suite {
+        def name = T {
+          millSourcePath.last
+        }
+
+        def description = T {
+          s"test suite ${name} from riscv-tests"
+        }
+
+        def binaries = T {
+          os.walk(untar().path).filter(p => p.last.startsWith(name())).filterNot(p => p.last.endsWith("dump")).map(PathRef(_))
+        }
+      }
+
+      def commit = T.input {
+        "047314c5b0525b86f7d5bb6ffe608f7a8b33ffdb"
+      }
+
+      def tgz = T.persistent {
+        Util.download(s"https://github.com/ZenithalHourlyRate/riscv-tests-release/releases/download/tag-${commit()}/riscv-tests.tgz")
+      }
+
+      def untar = T.persistent {
+        mill.modules.Jvm.runSubprocess(Seq("tar", "xzf", tgz().path).map(_.toString), Map[String, String](), T.dest)
+        PathRef(T.dest)
+      }
+
+      // These bucket are generated via
+      // os.walk(os.pwd).map(_.last).filterNot(_.endsWith("dump")).map(_.split('-').dropRight(1).mkString("-")).toSet.toSeq.sorted.foreach(println)
+      object `rv32mi-p` extends Suite
+
+      object `rv32mi-p-lh` extends Suite
+
+      object `rv32mi-p-lw` extends Suite
+
+      object `rv32mi-p-sh` extends Suite
+
+      object `rv32mi-p-sw` extends Suite
+
+      object `rv32si-p` extends Suite
+
+      object `rv32ua-p` extends Suite
+
+      object `rv32ua-v` extends Suite
+
+      object `rv32uc-p` extends Suite
+
+      object `rv32uc-v` extends Suite
+
+      object `rv32ud-p` extends Suite
+
+      object `rv32ud-v` extends Suite
+
+      object `rv32uf-p` extends Suite
+
+      object `rv32uf-v` extends Suite
+
+      object `rv32ui-p` extends Suite
+
+      object `rv32ui-v` extends Suite
+
+      object `rv32um-p` extends Suite
+
+      object `rv32um-v` extends Suite
+
+      object `rv32uzfh-p` extends Suite
+
+      object `rv32uzfh-v` extends Suite
+
+      object `rv64mi-p` extends Suite
+
+      object `rv64mi-p-ld` extends Suite
+
+      object `rv64mi-p-lh` extends Suite
+
+      object `rv64mi-p-lw` extends Suite
+
+      object `rv64mi-p-sd` extends Suite
+
+      object `rv64mi-p-sh` extends Suite
+
+      object `rv64mi-p-sw` extends Suite
+
+      object `rv64mzicbo-p` extends Suite
+
+      object `rv64si-p` extends Suite
+
+      object `rv64si-p-icache` extends Suite
+
+      object `rv64ssvnapot-p` extends Suite
+
+      object `rv64ua-p` extends Suite
+
+      object `rv64ua-v` extends Suite
+
+      object `rv64uc-p` extends Suite
+
+      object `rv64uc-v` extends Suite
+
+      object `rv64ud-p` extends Suite
+
+      object `rv64ud-v` extends Suite
+
+      object `rv64uf-p` extends Suite
+
+      object `rv64uf-v` extends Suite
+
+      object `rv64ui-p` extends Suite
+
+      object `rv64ui-v` extends Suite
+
+      object `rv64um-p` extends Suite
+
+      object `rv64um-v` extends Suite
+
+      object `rv64uzfh-p` extends Suite
+
+      object `rv64uzfh-v` extends Suite
+    }
+  }
+
 }
 
 object tests extends Module {
