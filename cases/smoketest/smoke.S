@@ -1,6 +1,6 @@
 .global _start
 _start:
-    csrwi mstatus,0
+    
     lui a0,0x2
     addi a0,a0,512
     csrs mstatus,a0

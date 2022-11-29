@@ -128,7 +128,7 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
 
   pc = proc.get_state()->pc;
   inst_bits = fetch.insn.bits();
-  uint32_t opcode = clip(inst_bits, 0, 6);
+  uint8_t opcode = clip(inst_bits, 0, 6);
   is_load = opcode == 0b111;
   is_store = opcode == 0b100011;
   is_csr = opcode == 0b1110011;

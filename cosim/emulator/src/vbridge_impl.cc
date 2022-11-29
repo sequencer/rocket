@@ -21,7 +21,7 @@ inline uint32_t decode_size(uint32_t encoded_size) {
 
 VBridgeImpl::VBridgeImpl() :
     sim(1 << 30),
-    isa("rv64gc", "M"),
+    isa("rv64gc", "msu"),
     _cycles(100),
     proc(
         /*isa*/ &isa,
@@ -164,7 +164,6 @@ void VBridgeImpl::run() {
           if(se_iter->pc == pc){
             se_iter->is_committed = true;
             LOG(INFO) << fmt::format("Set spike {:08X} as committed",se_iter->pc);
-            if (se_iter -> is_csr) continue;
             break;
           }
         }
@@ -194,9 +193,12 @@ void VBridgeImpl::run() {
   }
 
 void VBridgeImpl::loop_until_se_queue_full() {
+  LOG(INFO) << fmt::format("Refilling Spike queue");
   while (to_rtl_queue.size() < to_rtl_queue_size) {
     try {
-      if (auto spike_event = spike_step()) {
+      std::optional<SpikeEvent> spike_event = spike_step();
+      //LOG(INFO) << fmt::format("spike_event.has_value = {} pc = {:08X}",spike_event.has_value(),spike_event->pc);
+      if (spike_event.has_value()) {
         // LOG(INFO) << fmt::format("insert se pc = {:08X}.", spike_event->pc);
         SpikeEvent &se = spike_event.value();
         to_rtl_queue.push_front(std::move(se));
@@ -210,36 +212,55 @@ void VBridgeImpl::loop_until_se_queue_full() {
 
 // ->log_arch_changes()
 // ->create_spike_event()
+// don't creat spike event for csr insn
 std::optional<SpikeEvent> VBridgeImpl::spike_step() {
   auto state = proc.get_state();
   auto fetch = proc.get_mmu()->load_insn(state->pc);
   auto event = create_spike_event(fetch);  // event not empty iff fetch is v inst
   auto &xr = proc.get_state()->XPR; // todo: ?
+  LOG(INFO) << fmt::format("Spike start to execute pc={:08X} insn = {:08X}",state->pc,fetch.insn.bits());
+  if(event){
+    auto &se = event.value();
+    // now event always exists,just func
+    // todo: detail ?
 
-  auto &se = event.value();
-  // now event always exists,just func
-  // todo: detail ?
-  LOG(INFO) << fmt::format("Spike func before pc={:08X} insn = {:08X}",state->pc,fetch.insn.bits());
-  reg_t pc = fetch.func(&proc, fetch.insn, state->pc);
-  // Bypass CSR insns commitlog stuff.
-  if (!invalid_pc(pc)) {
-    state->pc = pc;
-  } else if (pc == PC_SERIALIZE_BEFORE) {
-    // CSRs are in a well-defined state.
-    state->serialized = true;
+    state->pc = fetch.func(&proc, fetch.insn, state->pc);
+    se.log_arch_changes();
+    //LOG(INFO) << fmt::format("Spike after execute pc={:08X} ",state->pc);
+
+
+  }else{
+    //LOG(INFO) << fmt::format("Spike CSR start to execute pc={:08X} insn = {:08X}",state->pc,fetch.insn.bits());
+    if(state->pc == 0x800000DC){
+      //LOG(INFO) << fmt::format("Stop here");
+    }
+    reg_t pc = fetch.func(&proc, fetch.insn, state->pc);
+    //LOG(INFO) << fmt::format("second Stop here");
+
+
+    if (!invalid_pc(pc)) {
+      state->pc = pc;
+    } else if (pc == PC_SERIALIZE_BEFORE) {
+      // CSRs are in a well-defined state.
+     // LOG(INFO) << fmt::format("Find invalid pc={:08X} ",pc);
+      state->serialized = true;
+    }
+    //LOG(INFO) << fmt::format("Spike CSR insn ends with pc={:08X} ",state->pc);
+
   }
-  LOG(INFO) << fmt::format("Spike func after pc={:08X} ",state->pc);
-
-  se.log_arch_changes();
-
-
   return event;
 }
 
 // now we take all the instruction as spike event
 std::optional<SpikeEvent> VBridgeImpl::create_spike_event(insn_fetch_t fetch) {
+  uint32_t opcode = clip(fetch.insn.bits(), 0, 6);
+  if (opcode != 0b1110011) {
+    return SpikeEvent{proc, fetch, this};
+  } else{
+    return {};
+  }
 
-  return SpikeEvent{proc, fetch, this};
+
 }
 
 void VBridgeImpl::record_rf_access() {
@@ -248,34 +269,43 @@ void VBridgeImpl::record_rf_access() {
   uint32_t waddr =  top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__rf_waddr;
   uint64_t wdata =  top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__rf_wdata;
   uint64_t pc = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_reg_pc;
-  LOG(INFO) << fmt::format("RTL wirte reg({}) = {:08X}, pc = {:08X}",waddr,wdata,pc);
+  uint64_t insn = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_reg_inst;
 
+  uint8_t opcode = clip(insn,0,6);
+  bool rtl_csr = opcode == 0b1110011;
 
-  LOG(INFO) << fmt::format("List all the queue");
-  for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-    //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
-    LOG(INFO) << fmt::format("spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
-  }
+  // exclude those rtl reg_write from csr insn
+  if(!rtl_csr){
+    LOG(INFO) << fmt::format("RTL wirte reg({}) = {:08X}, pc = {:08X}",waddr,wdata,pc);
 
-  // find spike event
-  SpikeEvent *se = nullptr;
-  for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-    if ((se_iter->pc == pc) && (se_iter->rd_idx == waddr)&& (!se_iter->is_committed)) {
-      se = &(*se_iter);
-      break;
+//    LOG(INFO) << fmt::format("List all the queue");
+//    for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
+//      //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
+//      LOG(INFO) << fmt::format("spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
+//    }
+
+    // find spike event
+    SpikeEvent *se = nullptr;
+    for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
+      if ((se_iter->pc == pc) && (se_iter->rd_idx == waddr)&& (!se_iter->is_committed)) {
+        se = &(*se_iter);
+        break;
+      }
     }
-  }
-  if(se == nullptr){
-    LOG(FATAL) << fmt::format("Cant find Spike Event");
+    if(se == nullptr){
+      LOG(FATAL) << fmt::format("Cant find Spike Event for pc = {:08X} , insn={:08X}",pc,insn);
+    }
+
+    // start to diff
+    // for non-store ins. check rf write
+    if(!(se->is_store)){
+      CHECK_EQ_S(wdata,se->rd_new_bits) << fmt::format("\n RTL write Reg({})={:08X} but Spike write={:08X}",waddr,wdata,se->rd_new_bits);
+    } else {
+      LOG(INFO) << fmt::format("Find Store insn");
+    }
+
   }
 
-  // start to diff
-  // for non-store ins. check rf write
-  if(!(se->is_store)){
-    CHECK_EQ_S(wdata,se->rd_new_bits) << fmt::format("\n For Reg({}) rtl write {:08X} but Spike write {:08X}",waddr,wdata,se->rd_new_bits);
-  } else {
-    LOG(INFO) << fmt::format("Find Store insn");
-  }
 
 }
 

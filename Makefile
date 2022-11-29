@@ -34,8 +34,8 @@ test:
 show:
 	riscv64-elf-objdump -Dzr out/mycases/cases/riscvtests/rv64mi-p/rv64mi-p-csr | less
 
-jump:
-	riscv64-elf-objdump -Dzr out/cases/jump/compile.dest/jump.elf | less
+smoke:
+	riscv64-elf-objdump -Dzr out/cases/smoketest/compile.dest/smoketest.elf | less
 
 
 clean:
