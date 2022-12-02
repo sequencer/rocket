@@ -1,9 +1,9 @@
 .global _start
 _start:
-    
-    lui a0,0x2
-    addi a0,a0,512
-    csrs mstatus,a0
+    li a1,0x6000
+    csrs mstatus,a1
+    csrc mstatus,a1
+    add t0,t0,x0
     addi t0, x0, 0x1
     addi t1, x0, 0x0
     addi t3, x0, 0xa

@@ -1,7 +1,7 @@
 #include <fmt/core.h>
 #include <glog/logging.h>
 
-
+#include "disasm.h"
 
 #include "verilated.h"
 
@@ -80,7 +80,13 @@ void VBridgeImpl::configure_simulator(int argc, char **argv) {
 
 void VBridgeImpl::init_spike() {
   // reset spike CPU
-  proc.reset();
+  // no need
+  //proc.reset();
+
+  auto state = proc.get_state();
+  LOG(INFO) << fmt::format("Spike reset misa={:08X}",state->misa->read());
+  LOG(INFO) << fmt::format("Spike reset mstatus={:08X}",state->mstatus->read());
+
 
   // load binary to reset_vector
   sim.load(bin, reset_vector);
@@ -152,6 +158,7 @@ void VBridgeImpl::run() {
       if(top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_valid){
 
         uint64_t pc = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_reg_pc;
+        LOG(INFO) << fmt::format("************************************************************************************");
         LOG(INFO) << fmt::format("WB insn {:08X} ",pc);
 
         // Check rf write
@@ -168,11 +175,11 @@ void VBridgeImpl::run() {
           }
         }
         //debug
-        LOG(INFO) << fmt::format("List all the queue after commit");
-        for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-          //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
-          LOG(INFO) << fmt::format("spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
-        }
+//        LOG(INFO) << fmt::format("List all the queue after commit");
+//        for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
+//          //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
+//          LOG(INFO) << fmt::format("spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
+//        }
 
         // pop
         for(int i = 0;i<5;i++){
@@ -215,43 +222,64 @@ void VBridgeImpl::loop_until_se_queue_full() {
 // don't creat spike event for csr insn
 std::optional<SpikeEvent> VBridgeImpl::spike_step() {
   auto state = proc.get_state();
+  auto pc_before = state->pc;
+  LOG(INFO) << fmt::format("----------------------------------------------------");
+  LOG(INFO) << fmt::format("Spike start to fetch pc={:08X} ",pc_before);
   auto fetch = proc.get_mmu()->load_insn(state->pc);
   auto event = create_spike_event(fetch);  // event not empty iff fetch is v inst
   auto &xr = proc.get_state()->XPR; // todo: ?
-  LOG(INFO) << fmt::format("Spike start to execute pc={:08X} insn = {:08X}",state->pc,fetch.insn.bits());
+  reg_t pc;
+  //-------------debug-----------------
+//  auto search = state->csrmap.find(CSR_FCSR);
+//  if (search != state->csrmap.end()) {
+//    LOG(INFO) << fmt::format("FCSR ={:08X}",search->second->read());
+//  }
+//  LOG(INFO) << fmt::format("insn.csr = {:08X}",fetch.insn.csr());
+//  LOG(INFO) << fmt::format("Spike sstatus={:08X}",state->sstatus->read());
+
+  LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",10,state->XPR[10]);
+  LOG(INFO) << fmt::format("Spike before mstatus={:08X}",state->mstatus->read());
+  LOG(INFO) << fmt::format("Spike start to execute pc=[{:08X}] insn = {:08X} DISASM:{}",pc_before,fetch.insn.bits(),proc.get_disassembler()->disassemble(fetch.insn));
+      if(state->pc == 0x1006 ){
+      LOG(INFO) << fmt::format("Stop here");
+    }
+//-------------------------------------------------------------
   if(event){
     auto &se = event.value();
     // now event always exists,just func
     // todo: detail ?
 
-    state->pc = fetch.func(&proc, fetch.insn, state->pc);
+    pc = fetch.func(&proc, fetch.insn, state->pc);
     se.log_arch_changes();
     //LOG(INFO) << fmt::format("Spike after execute pc={:08X} ",state->pc);
 
-
   }else{
     //LOG(INFO) << fmt::format("Spike CSR start to execute pc={:08X} insn = {:08X}",state->pc,fetch.insn.bits());
-    if(state->pc == 0x800000DC){
-      //LOG(INFO) << fmt::format("Stop here");
-    }
-    reg_t pc = fetch.func(&proc, fetch.insn, state->pc);
-    //LOG(INFO) << fmt::format("second Stop here");
+//    if(state->pc == 0x800000DC){
+//      LOG(INFO) << fmt::format("Stop here");
+//    }
 
+    pc = fetch.func(&proc, fetch.insn, state->pc);
 
-    if (!invalid_pc(pc)) {
-      state->pc = pc;
-    } else if (pc == PC_SERIALIZE_BEFORE) {
-      // CSRs are in a well-defined state.
-     // LOG(INFO) << fmt::format("Find invalid pc={:08X} ",pc);
-      state->serialized = true;
-    }
+    //LOG(INFO) << fmt::format("pc = {:08x}",pc);
+
     //LOG(INFO) << fmt::format("Spike CSR insn ends with pc={:08X} ",state->pc);
 
   }
+  LOG(INFO) << fmt::format("Spike after mstatus={:08X}",state->mstatus->read());
+  LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",10,state->XPR[10]);
+  if (!invalid_pc(pc)) {
+    state->pc = pc;
+  } else if (pc == PC_SERIALIZE_BEFORE) {
+    // CSRs are in a well-defined state.
+     LOG(INFO) << fmt::format("Find invalid pc={:08X} ",pc);
+    state->serialized = true;
+  }
+  LOG(INFO) << fmt::format("Spike finished pc={:08X} ",pc_before);
   return event;
 }
 
-// now we take all the instruction as spike event
+// now we take all the instruction as spike event except csr insn
 std::optional<SpikeEvent> VBridgeImpl::create_spike_event(insn_fetch_t fetch) {
   uint32_t opcode = clip(fetch.insn.bits(), 0, 6);
   if (opcode != 0b1110011) {
@@ -303,7 +331,8 @@ void VBridgeImpl::record_rf_access() {
     } else {
       LOG(INFO) << fmt::format("Find Store insn");
     }
-
+  } else {
+    LOG(INFO) << fmt::format("RTL csr wirte reg({}) = {:08X}, pc = {:08X}",waddr,wdata,pc);
   }
 
 

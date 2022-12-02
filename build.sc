@@ -963,6 +963,26 @@ object mytests extends Module {
   object smoketest extends Test {
     def bin = cases.smoketest
   }
+
+}
+
+object tmpcase extends Module {
+  trait Test extends TaskModule {
+    override def defaultCommandName() = "run"
+
+
+    def run(args: String*) = T.command {
+      val proc = os.proc(Seq(cosim.emulator.elf().path.toString(),"--bin", (os.pwd / "tmpcase" / "rv64mi-p-csr-bin").toString, "--wave", (T.dest / "wave").toString) ++ args)
+      T.log.info(s"run test:  with:\n ${proc.command.map(_.value.mkString(" ")).mkString(" ")}")
+      proc.call(T.dest)
+      PathRef(T.dest)
+    }
+  }
+
+  object test extends Test {
+    def bin = cases.smoketest
+  }
+
 }
 
 object cosim extends Module {

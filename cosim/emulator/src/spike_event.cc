@@ -55,7 +55,7 @@ void SpikeEvent::log_arch_changes() {
       if (rd_new_bits != rd_should_be_bits ) {
         rd_new_bits = rd_should_be_bits;
         is_rd_written = true;
-        LOG(INFO) << fmt::format("Log Spike {:08X} with scalar rf change: x[{}] from {:08X} to {:08X}", pc, rd_idx, rd_old_bits, rd_new_bits);
+        //LOG(INFO) << fmt::format("Log Spike {:08X} with scalar rf change: x[{}] from {:08X} to {:08X}", pc, rd_idx, rd_old_bits, rd_new_bits);
       }
     }
 //    else if((write_idx & 0xf) == 0b0100){
@@ -135,6 +135,8 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
 
   is_issued = false;
   is_committed = false;
+
+  disasm = proc.get_disassembler()->disassemble(fetch.insn);
 
 
 }

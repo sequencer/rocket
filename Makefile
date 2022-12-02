@@ -26,11 +26,8 @@ compile:
 test:
 	mill -i -j 0 tests.run.rv64default.run
 
-#mytest:
-	#rm -rf out/cases
-	#rm -rf out/cosim/emulator
-	#rm -rf out/mytests
-	#mill mytests.smoketest --cycles 100
+mytest:
+	mill tmpcase.test --cycles 1000
 show:
 	riscv64-elf-objdump -Dzr out/mycases/cases/riscvtests/rv64mi-p/rv64mi-p-csr | less
 

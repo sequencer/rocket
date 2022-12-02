@@ -53,6 +53,10 @@ struct SpikeEvent {
   bool is_store;
   bool is_csr;
 
+  std::string disasm;
+
+
+
   uint64_t pc;
   uint32_t inst_bits;
 
