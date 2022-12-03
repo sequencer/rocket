@@ -162,28 +162,33 @@ void VBridgeImpl::run() {
       if(top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_valid){
 
         uint64_t pc = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_reg_pc;
-        LOG(INFO) << fmt::format("************************************************************************************");
-        LOG(INFO) << fmt::format("WB insn {:08X} ",pc);
-
+        LOG(INFO) << fmt::format("********************************************************************************************************");
+        LOG(INFO) << fmt::format("RTL write back insn {:08X} ",pc);
+        // ---------------------------------------------------------------------------------------------------
         // Check rf write
         // todo: use rf_valid
         if(top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT____Vcellinp__rf_ext__W0_en){
           record_rf_access();
         }
+        // ---------------------------------------------------------------------------------------------------
         // commit spike event
+        bool commit = false;
         for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
           if(se_iter->pc == pc){
+            commit = true;
             se_iter->is_committed = true;
             LOG(INFO) << fmt::format("Set spike {:08X} as committed",se_iter->pc);
             break;
           }
         }
+        if(!commit) LOG(INFO) << fmt::format("RTL wb without se in pc =  {:08X}",pc);
+        // ------------------------------------------------------------------------------------
         //debug
-//        LOG(INFO) << fmt::format("List all the queue after commit");
-//        for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-//          //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
-//          LOG(INFO) << fmt::format("spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
-//        }
+        LOG(INFO) << fmt::format("List all the queue after RTL commit");
+        for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
+          //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
+          LOG(INFO) << fmt::format("spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
+        }
 
         // pop
         for(int i = 0;i<5;i++){
@@ -233,7 +238,13 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
   // to use pro.state, set some csr 
   state->dcsr->halt = false;
   auto pc_before = state->pc;
-  LOG(INFO) << fmt::format("----------------------------------------------------");
+  LOG(INFO) << fmt::format("--------------------------------------------------------------------------------------------------------");
+  // todo: for a case where pc go 8000000000000000 + epc, but why?
+  if(pc_before & 0x8000000000000000){
+    state->pc = 0x80000004;
+    proc.step(1);
+    return {};
+  }
   LOG(INFO) << fmt::format("Spike start to fetch pc={:08X} ",pc_before);
   auto fetch = proc.get_mmu()->load_insn(state->pc);
   auto event = create_spike_event(fetch);  // event not empty iff fetch is v inst
@@ -293,8 +304,6 @@ std::optional<SpikeEvent> VBridgeImpl::create_spike_event(insn_fetch_t fetch) {
   } else{
     return {};
   }
-
-
 }
 
 void VBridgeImpl::record_rf_access() {
@@ -333,7 +342,7 @@ void VBridgeImpl::record_rf_access() {
       LOG(INFO) << fmt::format("Find Store insn");
     }
   } else {
-    LOG(INFO) << fmt::format("RTL csr wirte reg({}) = {:08X}, pc = {:08X}",waddr,wdata,pc);
+    LOG(INFO) << fmt::format("RTL csr insn wirte reg({}) = {:08X}, pc = {:08X}",waddr,wdata,pc);
   }
 
 
@@ -404,12 +413,12 @@ void VBridgeImpl::receive_tl_req() {
   }
   // todo: good check
   if(se == nullptr){
-         LOG(INFO) << fmt::format("List all the queue after commit");
-        for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-          //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
-          LOG(INFO) << fmt::format("List: spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
-          LOG(INFO) << fmt::format("List:spike block.addr = {:08X}",se_iter->block.addr);
-        }
+//         LOG(INFO) << fmt::format("List all the queue after commit");
+//        for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
+//          //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
+//          LOG(INFO) << fmt::format("List: spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
+//          LOG(INFO) << fmt::format("List:spike block.addr = {:08X}",se_iter->block.addr);
+//        }
 
     LOG(FATAL) << fmt::format("cannot find spike_event for tl_request; addr = {:08X}",addr);
 
