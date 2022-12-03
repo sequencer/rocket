@@ -49,7 +49,7 @@ public:
 
   ~VBridgeImpl();
 
-  void setup(const std::string &bin, const std::string &wave, uint64_t reset_vector, uint64_t cycles);
+  void setup(const std::string &bin, const std::string &ebin,const std::string &wave, uint64_t reset_vector, uint64_t cycles);
   // todo remove this.
   void configure_simulator(int argc, char **argv);
 
@@ -73,6 +73,8 @@ private:
   uint64_t _cycles;
   /// file path of executeable binary file, which will be executed.
   std::string bin;
+  // entrance bin
+  std::string ebin;
   /// generated waveform path.
   std::string wave;
   /// reset vector of

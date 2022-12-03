@@ -33,7 +33,7 @@ public:
 
 
 
-      std::ifstream fs_init("/home/yyq/Projects/rocket/out/cases/jump/compile.dest/jump", std::ifstream::binary);
+      std::ifstream fs_init("/home/yyq/Projects/rocket/out/cases/entrance/compile.dest/entrance", std::ifstream::binary);
       assert(fs_init.is_open());
       size_t cnt = 0x1000;
       while (!fs_init.eof()) {

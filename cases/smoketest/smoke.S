@@ -1,8 +1,8 @@
 .global _start
 _start:
-    li a1,0x6000
-    csrs mstatus,a1
-    csrc mstatus,a1
+    li t3,0x800
+    csrs misa,t3
+    csrr t0, misa
     add t0,t0,x0
     addi t0, x0, 0x1
     addi t1, x0, 0x0

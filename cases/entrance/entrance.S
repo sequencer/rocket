@@ -1,7 +1,5 @@
 .global _start
 _start:
-    lui t2, 0xA0002
-    csrw mstatus, t2
     auipc t1, 0x0
     addi a1, t1, 32
     csrr a0, mhartid
