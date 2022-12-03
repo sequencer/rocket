@@ -259,11 +259,11 @@ object cases extends Module {
   }
   object smoketest extends Case
 
-  object jump extends Case
+  object entrance extends Case
 }
 
-object mycases extends Module{
-  object cases extends Module {
+object riscvtests extends Module{
+
     c =>
     trait Suite extends Module {
       def name: T[String]
@@ -273,7 +273,7 @@ object mycases extends Module{
       def binaries: T[Seq[PathRef]]
     }
 
-    object riscvtests extends Module {
+    object test extends Module {
       trait Suite extends c.Suite {
         def name = T {
           millSourcePath.last
@@ -285,6 +285,22 @@ object mycases extends Module{
 
         def binaries = T {
           os.walk(untar().path).filter(p => p.last.startsWith(name())).filterNot(p => p.last.endsWith("dump")).map(PathRef(_))
+        }
+// llvm-objcopy","-O", "binary", bin.path.last+".elf",bin.path.last+"-bin"
+        def init = T {
+          binaries().map(bin =>{
+            os.proc("cp", bin.path, "./" + bin.path.last + ".elf").call(T.dest)
+            os.proc("llvm-objcopy","-O", "binary", bin.path.last+".elf",bin.path.last).call(T.dest)
+          })
+          T.dest
+        }
+
+        def test = T {
+          println("why")
+
+          binaries.map(a =>
+            println("hello"))
+          PathRef(T.dest)
         }
       }
 
@@ -393,7 +409,7 @@ object mycases extends Module{
 
       object `rv64uzfh-v` extends Suite
     }
-  }
+
 
 }
 
