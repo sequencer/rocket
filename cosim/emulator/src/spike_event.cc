@@ -68,7 +68,7 @@ void SpikeEvent::log_arch_changes() {
 
   for (auto mem_write: state->log_mem_write) {
     uint64_t address = std::get<0>(mem_write);
-    uint64_t write_addr = address & 0xC0;
+    uint64_t write_addr = address & 0xFFFFFFC0;
     uint64_t value = std::get<1>(mem_write);
     // Byte size_bytes
     uint8_t size_by_byte = std::get<2>(mem_write);
@@ -81,7 +81,7 @@ void SpikeEvent::log_arch_changes() {
       }
       //LOG(INFO) << fmt::format("Find insn: {:08X} , at:{:08X}",insn,addr + i*8);
       block.blocks[i] = data;
-      block.addr = write_addr;
+      block.addr = address;
       block.remaining = true;
     }
     LOG(INFO) << fmt::format("spike detect mem write {:08X} on mem:{:08X} with size={}byte; block_addr={:08X}", value, address, size_by_byte,write_addr);
@@ -90,7 +90,9 @@ void SpikeEvent::log_arch_changes() {
   // since log_mem_read doesn't record mem data, we need to load manually
   for (auto mem_read: state->log_mem_read) {
     uint64_t address = std::get<0>(mem_read);
-    uint64_t read_addr = address & 0xC0;
+    // mem block start addr
+    uint64_t addr_align = address & 0xFFFFFFC0;
+    LOG(INFO) << fmt::format("addr_align = {:08X}", addr_align);
     // Byte size_bytes
     uint8_t size_by_byte = std::get<2>(mem_read);
     uint64_t value = 0;
@@ -103,14 +105,14 @@ void SpikeEvent::log_arch_changes() {
       uint64_t data = 0;
       //scan 8 bytes to data
       for (int j = 0; j < 8; ++j) {
-        data += (uint64_t) impl->load(read_addr + j + i*8) << (j * 8);
+        data += (uint64_t) impl->load(addr_align + j + i*8) << (j * 8);
       }
       //LOG(INFO) << fmt::format("Find insn: {:08X} , at:{:08X}",insn,addr + i*8);
       block.blocks[i] = data;
-      block.addr = read_addr;
+      block.addr = addr_align;
       block.remaining = true;
     }
-    LOG(INFO) << fmt::format("spike detect mem read {:08X} on mem:{:08X} with size={}byte; block_addr={:08X}", value, address, size_by_byte,read_addr);
+    LOG(INFO) << fmt::format("spike detect mem read {:08X} on mem:{:08X} with size={}byte; block_addr={:08X}", value, address, size_by_byte,addr_align);
     mem_access_record.all_reads[address] = { .size_by_byte = size_by_byte, .val = value };
   }
 
