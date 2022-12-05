@@ -241,12 +241,12 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
   LOG(INFO) << fmt::format("--------------------------------------------------------------------------------------------------------");
   LOG(INFO) << fmt::format("Spike start to fetch pc={:08X} ",pc_before);
   //----------------------------DEBUG before fetch------------------------------------------------------
-  if(pc_before == 0x800001DC) {
-    LOG(INFO) << fmt::format("stop");
-    proc.step(1);
-    LOG(INFO) << fmt::format("Debug after execute pc={:08X} ",state->pc);
-    return{};
-  }
+//  if(pc_before == 0x800001DC) {
+//    LOG(INFO) << fmt::format("stop");
+//    proc.step(1);
+//    LOG(INFO) << fmt::format("Debug after execute pc={:08X} ",state->pc);
+//    return{};
+//  }
   try{
     auto fetch = proc.get_mmu()->load_insn(state->pc);
     auto event = create_spike_event(fetch);  // event not empty iff fetch is v inst
