@@ -240,8 +240,12 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
   auto pc_before = state->pc;
   LOG(INFO) << fmt::format("--------------------------------------------------------------------------------------------------------");
   LOG(INFO) << fmt::format("Spike start to fetch pc={:08X} ",pc_before);
-  if(pc_before == 0x80000000800001D8) {
+  //----------------------------DEBUG before fetch------------------------------------------------------
+  if(pc_before == 0x800001DC) {
     LOG(INFO) << fmt::format("stop");
+    proc.step(1);
+    LOG(INFO) << fmt::format("Debug after execute pc={:08X} ",state->pc);
+    return{};
   }
   try{
     auto fetch = proc.get_mmu()->load_insn(state->pc);
@@ -261,9 +265,9 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
     LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",6,state->XPR[6]);
     LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",7,state->XPR[7]);
 //----------------------------DEBUG before execute------------------------------------------------------
-    if(pc_before == 0x80000224) {
-      LOG(INFO) << fmt::format("stop");
-    }
+//    if(pc_before == 0x80000224) {
+//      LOG(INFO) << fmt::format("stop");
+//    }
 
 //----------------------------------------------------------------------------------
 
@@ -305,6 +309,14 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
     proc.step(1);
     LOG(INFO) << fmt::format("Spike mcause={:08X}",state->mcause->read());
     return {};
+  }catch (triggers::matched_t& t)
+  {
+    LOG(INFO) << fmt::format("spike triggers ");
+    proc.step(1);
+    LOG(INFO) << fmt::format("Spike mcause={:08X}",state->mcause->read());
+    return {};
+
+
   }
 
 
