@@ -32,23 +32,7 @@ void SpikeEvent::log_arch_changes() {
     // xx0010 <- vreg
     // xx0011 <- vec
     // xx0100 <- csr
-//    if ((write_idx & 0xf) == 0b0010) {  // vreg
-//      auto vd = (write_idx >> 4);
-//      CHECK_EQ_S(vd, rd_idx) << fmt::format("expect to write vrf[{}], detect writing vrf[{}]", rd_idx, vd);
-//      CHECK_LT_S(vd, 32) << fmt::format("log_reg_write vd ({}) out of bound", vd);
-//
-//      uint8_t *vd_bits_start = &proc.VU.elt<uint8_t>(rd_idx, 0);
-//      uint32_t len = consts::vlen_in_bits << vlmul / 8;
-//      for (int i = 0; i < len; i++) {
-//        uint8_t origin_byte = vd_write_record.vd_bytes[i], cur_byte = vd_bits_start[i];
-//        if (origin_byte != cur_byte) {
-//          vrf_access_record.all_writes[vd * consts::vlen_in_bytes + i] = {.byte = cur_byte };
-//          LOG(INFO) << fmt::format("spike detect vrf change: vrf[{}, {}] from {} to {} [{}]",
-//                                   vd, i, (int) origin_byte, (int) cur_byte, vd * consts::vlen_in_bytes + i);
-//        }
-//      }
-//
-//    }
+
     if ((write_idx & 0xf) == 0b0000) {  // scalar rf
       //LOG(INFO) << fmt::format("idx = {:08X} data = {:08X}", rd_idx, rd_bits);
       uint64_t rd_should_be_bits = proc.get_state()->XPR[rd_idx];
@@ -112,8 +96,27 @@ void SpikeEvent::log_arch_changes() {
       block.addr = addr_align;
       block.remaining = true;
     }
-    LOG(INFO) << fmt::format("spike detect mem read {:08X} on mem:{:08X} with size={}byte; block_addr={:08X}", value, address, size_by_byte,addr_align);
+
+
+
+    LOG(INFO) << fmt::format("spike detect mem read {:08X} on mem:{:08X} with size={}byte; block_addr={:08X}", value, address, size_by_byte,block.addr);
     mem_access_record.all_reads[address] = { .size_by_byte = size_by_byte, .val = value };
+  }
+
+  // record root page table
+  if (satp_mode == 0x8 && block.addr==-1){
+    LOG(INFO) << fmt::format("find satp_mode == 8" );
+    uint64_t root_addr = satp_ppn << 12;
+    for(int i=0; i<8 ; i++){
+      uint64_t data = 0;
+      //scan 8 bytes to data
+      for (int j = 0; j < 8; ++j) {
+        data += (uint64_t) impl->load(root_addr + j + i*8) << (j * 8);
+      }
+      block.blocks[i] = data;
+      block.addr = root_addr;
+      block.remaining = true;
+    }
   }
 
   //state->log_reg_write.clear();
@@ -137,6 +140,12 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
 
   is_issued = false;
   is_committed = false;
+
+  satp = proc.get_state()->satp->read();
+  satp_ppn = satp & 0xFFFFFFFFFFF;
+  satp_mode = clip(satp,60,63);
+
+  block.addr = -1;
 
   disasm = proc.get_disassembler()->disassemble(fetch.insn);
 

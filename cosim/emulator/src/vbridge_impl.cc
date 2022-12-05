@@ -262,12 +262,13 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
 //  LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",10,state->XPR[10]);
 //  LOG(INFO) << fmt::format("Spike before mstatus={:08X}",state->mstatus->read());
     LOG(INFO) << fmt::format("Spike start to execute pc=[{:08X}] insn = {:08X} DISASM:{}",pc_before,fetch.insn.bits(),proc.get_disassembler()->disassemble(fetch.insn));
-    LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",6,state->XPR[6]);
-    LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",7,state->XPR[7]);
+    LOG(INFO) << fmt::format("X[{}] = 0x{:08X}",6,state->XPR[6]);
+    LOG(INFO) << fmt::format("X[{}] = 0x{:08X}",7,state->XPR[7]);
+    LOG(INFO) << fmt::format("a0 = 0x{:08X}",state->XPR[10]);
 //----------------------------DEBUG before execute------------------------------------------------------
-//    if(pc_before == 0x80000224) {
-//      LOG(INFO) << fmt::format("stop");
-//    }
+    if(pc_before == 0x800001C0) {
+      LOG(INFO) << fmt::format("stop");
+    }
 
 //----------------------------------------------------------------------------------
 
@@ -305,13 +306,13 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
     LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",10,state->XPR[10]);
     return event;
   }catch(trap_t &trap) {
-    LOG(INFO) << fmt::format("spike trapped with {}", trap.name());
+    LOG(INFO) << fmt::format("spike fetch trapped with {}", trap.name());
     proc.step(1);
     LOG(INFO) << fmt::format("Spike mcause={:08X}",state->mcause->read());
     return {};
   }catch (triggers::matched_t& t)
   {
-    LOG(INFO) << fmt::format("spike triggers ");
+    LOG(INFO) << fmt::format("spike fetch triggers ");
     proc.step(1);
     LOG(INFO) << fmt::format("Spike mcause={:08X}",state->mcause->read());
     return {};
@@ -375,6 +376,7 @@ void VBridgeImpl::record_rf_access() {
 
 void VBridgeImpl::receive_tl_req() {
 #define TL(name) (get_tl_##name(top))
+  uint64_t pc = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__ex_reg_pc;
   int miss = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__frontend__DOT__icache__DOT__s2_miss;
   int valid = TL(a_valid);
   if (!TL(a_valid)) return;
@@ -426,7 +428,7 @@ void VBridgeImpl::receive_tl_req() {
     }
 
   }
-  // find corresponding SpikeEvent
+  // find corresponding SpikeEvent with addr
   SpikeEvent *se = nullptr;
   for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
     if(addr == se_iter->block.addr){
@@ -444,7 +446,7 @@ void VBridgeImpl::receive_tl_req() {
           LOG(INFO) << fmt::format("List:spike block.addr = {:08X}",se_iter->block.addr);
         }
 
-    LOG(FATAL) << fmt::format("cannot find spike_event for tl_request; addr = {:08X}",addr);
+    LOG(FATAL) << fmt::format("cannot find spike_event for tl_request; addr = {:08X}, pc = {:08X} , opcode = {}",addr,pc,opcode);
 
   }
 //  for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
@@ -518,7 +520,7 @@ void VBridgeImpl::receive_tl_req() {
       break;
     }
     default: {
-      LOG(INFO) << fmt::format("unknown tl opcode {}", opcode);
+      LOG(FATAL) << fmt::format("unknown tl opcode {}", opcode);
     }
 #undef TL
   }

@@ -70,6 +70,11 @@ struct SpikeEvent {
   uint64_t rd_new_bits;
   bool is_rd_written;
 
+  //csr
+  uint64_t satp;
+  uint64_t satp_ppn;
+  uint8_t satp_mode;
+
 
   Cacheblock block;
 
