@@ -158,7 +158,7 @@ void VBridgeImpl::run() {
       tfp.dump(2 * ctx.time() - 1);
 
 
-      // when wb_valid set spike event as commit
+      // when RTL detect write back
       if(top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_valid){
 
         uint64_t pc = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_reg_pc;
@@ -218,38 +218,36 @@ void VBridgeImpl::loop_until_se_queue_full() {
         // LOG(INFO) << fmt::format("insert se pc = {:08X}.", spike_event->pc);
         SpikeEvent &se = spike_event.value();
         to_rtl_queue.push_front(std::move(se));
-        LOG(INFO) << fmt::format("List all the queue");
-        for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-          //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
-          LOG(INFO) << fmt::format("spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
-        }
-
       }
     } catch (trap_t &trap) {
       LOG(FATAL) << fmt::format("spike trapped with {}", trap.name());
     }
   }
   LOG(INFO) << fmt::format("to_rtl_queue is full now, start to simulate.");
+  for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
+    LOG(INFO) << fmt::format("List: spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
+  }
 }
 
 // don't creat spike event for csr insn
+// use try-catch block to track trap in [fetch = proc.get_mmu()->load_insn(state->pc)]
+// todo: for trap insn, we don't create spike event; it might cause issues later;
 std::optional<SpikeEvent> VBridgeImpl::spike_step() {
   auto state = proc.get_state();
   // to use pro.state, set some csr 
   state->dcsr->halt = false;
+  // record pc before execute
   auto pc_before = state->pc;
   LOG(INFO) << fmt::format("--------------------------------------------------------------------------------------------------------");
-  // todo: for a case where pc go 8000000000000000 + epc, but why?
-  if(pc_before & 0x8000000000000000){
-    state->pc = 0x80000004;
-    proc.step(1);
-    return {};
-  }
   LOG(INFO) << fmt::format("Spike start to fetch pc={:08X} ",pc_before);
-  auto fetch = proc.get_mmu()->load_insn(state->pc);
-  auto event = create_spike_event(fetch);  // event not empty iff fetch is v inst
-  auto &xr = proc.get_state()->XPR; // todo: ?
-  //-------------debug-----------------
+  if(pc_before == 0x80000000800001D8) {
+    LOG(INFO) << fmt::format("stop");
+  }
+  try{
+    auto fetch = proc.get_mmu()->load_insn(state->pc);
+    auto event = create_spike_event(fetch);  // event not empty iff fetch is v inst
+    auto &xr = proc.get_state()->XPR;
+    //-------------debug-------------------------------------------------------------
 //  auto search = state->csrmap.find(CSR_FCSR);
 //  if (search != state->csrmap.end()) {
 //    LOG(INFO) << fmt::format("FCSR ={:08X}",search->second->read());
@@ -257,53 +255,64 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
 //  LOG(INFO) << fmt::format("insn.csr = {:08X}",fetch.insn.csr());
 //  LOG(INFO) << fmt::format("Spike sstatus={:08X}",state->sstatus->read());
 
-  LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",10,state->XPR[10]);
-  LOG(INFO) << fmt::format("Spike before mstatus={:08X}",state->mstatus->read());
-  LOG(INFO) << fmt::format("Spike start to execute pc=[{:08X}] insn = {:08X} DISASM:{}",pc_before,fetch.insn.bits(),proc.get_disassembler()->disassemble(fetch.insn));
-//-------------------------------------------------------------
-  if(event){
-    auto &se = event.value();
-    // now event always exists,just func
-    // todo: detail ?
+//  LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",10,state->XPR[10]);
+//  LOG(INFO) << fmt::format("Spike before mstatus={:08X}",state->mstatus->read());
+    LOG(INFO) << fmt::format("Spike start to execute pc=[{:08X}] insn = {:08X} DISASM:{}",pc_before,fetch.insn.bits(),proc.get_disassembler()->disassemble(fetch.insn));
+    LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",6,state->XPR[6]);
+    LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",7,state->XPR[7]);
+//----------------------------DEBUG before execute------------------------------------------------------
+    if(pc_before == 0x80000224) {
+      LOG(INFO) << fmt::format("stop");
+    }
 
+//----------------------------------------------------------------------------------
+
+    auto &se = event.value();
     proc.step(1);
     se.log_arch_changes();
     // todo: detect exactly the trap
+    // if a insn_after_pc = 0x80000004,set it as committed
     // set whose insn which traps committed in case queue stalls
     if (state->pc == 0x80000004){
       se.is_committed = true;
     }
 
     LOG(INFO) << fmt::format("Spike after execute pc={:08X} ",state->pc);
+    LOG(INFO) << fmt::format("Spike mcause={:08X}",state->mcause->read());
+
+
     LOG(INFO) << fmt::format("event block.addr= ",event.value().block.addr);
 
-  }else{
+
     //LOG(INFO) << fmt::format("Spike CSR start to execute pc={:08X} insn = {:08X}",state->pc,fetch.insn.bits());
 //    if(state->pc == 0x800000DC){
 //      LOG(INFO) << fmt::format("Stop here");
 //    }
-    proc.step(1);
+
 
 
     //LOG(INFO) << fmt::format("pc = {:08x}",pc);
 
     //LOG(INFO) << fmt::format("Spike CSR insn ends with pc={:08X} ",state->pc);
 
+
+    LOG(INFO) << fmt::format("Spike after mstatus={:08X}",state->mstatus->read());
+    LOG(INFO) << fmt::format("Spike after pc={:08X}",state->pc);
+    LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",10,state->XPR[10]);
+    return event;
+  }catch(trap_t &trap) {
+    LOG(INFO) << fmt::format("spike trapped with {}", trap.name());
+    proc.step(1);
+    LOG(INFO) << fmt::format("Spike mcause={:08X}",state->mcause->read());
+    return {};
   }
-  LOG(INFO) << fmt::format("Spike after mstatus={:08X}",state->mstatus->read());
-  LOG(INFO) << fmt::format("Spike after pc={:08X}",state->pc);
-  LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",10,state->XPR[10]);
-  return event;
+
+
 }
 
 // now we take all the instruction as spike event except csr insn
 std::optional<SpikeEvent> VBridgeImpl::create_spike_event(insn_fetch_t fetch) {
-  uint32_t opcode = clip(fetch.insn.bits(), 0, 6);
-  if (opcode != 0b1110011) {
     return SpikeEvent{proc, fetch, this};
-  } else{
-    return {};
-  }
 }
 
 void VBridgeImpl::record_rf_access() {
@@ -320,9 +329,7 @@ void VBridgeImpl::record_rf_access() {
   // exclude those rtl reg_write from csr insn
   if(!rtl_csr){
     LOG(INFO) << fmt::format("RTL wirte reg({}) = {:08X}, pc = {:08X}",waddr,wdata,pc);
-
-
-    // find spike event
+    // find corresponding spike event
     SpikeEvent *se = nullptr;
     for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
       if ((se_iter->pc == pc) && (se_iter->rd_idx == waddr)&& (!se_iter->is_committed)) {
@@ -331,11 +338,16 @@ void VBridgeImpl::record_rf_access() {
       }
     }
     if(se == nullptr){
-      LOG(FATAL) << fmt::format("Cant find Spike Event for pc = {:08X} , insn={:08X}",pc,insn);
+      for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
+        //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
+        LOG(INFO) << fmt::format("List: spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
+      }
+      LOG(FATAL) << fmt::format("RTL rf_write Cannot find se ; pc = {:08X} , insn={:08X}",pc,insn);
     }
 
-    // start to diff
+    // start to check RTL rf_write with spike event
     // for non-store ins. check rf write
+    // todo: why exclude store insn? store insn shouldn't write regfile.
     if(!(se->is_store)){
       CHECK_EQ_S(wdata,se->rd_new_bits) << fmt::format("\n RTL write Reg({})={:08X} but Spike write={:08X}",waddr,wdata,se->rd_new_bits);
     } else {
@@ -414,11 +426,11 @@ void VBridgeImpl::receive_tl_req() {
   // todo: good check
   if(se == nullptr){
 //         LOG(INFO) << fmt::format("List all the queue after commit");
-//        for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-//          //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
-//          LOG(INFO) << fmt::format("List: spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
-//          LOG(INFO) << fmt::format("List:spike block.addr = {:08X}",se_iter->block.addr);
-//        }
+        for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
+          //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
+          LOG(INFO) << fmt::format("List: spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
+          LOG(INFO) << fmt::format("List:spike block.addr = {:08X}",se_iter->block.addr);
+        }
 
     LOG(FATAL) << fmt::format("cannot find spike_event for tl_request; addr = {:08X}",addr);
 

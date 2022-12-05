@@ -10,10 +10,12 @@
 class simple_sim : public simif_t {
 private:
     char *mem;
+    uint64_t size;
 
 public:
     explicit simple_sim(size_t mem_size) {
       mem = new char[(mem_size*4)];
+      size = mem_size*4;
       LOG(INFO) << fmt::format("mem size = {:08X}",mem_size*4);
     }
 
@@ -54,12 +56,18 @@ public:
     }
 
     // should return NULL for MMIO addresses
+    // todo: for more oversize mem access return mem[0]
     char *addr_to_mem(reg_t addr) override {
+//      if (addr > size) return &mem[0];
+//      else return &mem[addr];
+      if (!paddr_ok(addr))
+        return NULL;
       return &mem[addr];
     }
-
+    // Do not use mmio;return false for Instruction access fault
     bool mmio_load(reg_t addr, size_t len, uint8_t *bytes) override {
-      assert(false && "not implemented");
+      // assert(false && "not implemented");
+      return false;
     }
 
     bool mmio_store(reg_t addr, size_t len, const uint8_t *bytes) override {
@@ -73,5 +81,10 @@ public:
 
     const char *get_symbol(uint64_t addr) override {
       LOG(FATAL) << "not implemented";
+    }
+
+    static bool paddr_ok(reg_t addr)
+    {
+      return (addr >> MAX_PADDR_BITS) == 0;
     }
 };

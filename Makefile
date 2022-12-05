@@ -29,7 +29,7 @@ test:
 mytest:
 	mill tmpcase.test --cycles 1000
 show:
-	riscv64-elf-objdump -Dzr out/mycases/cases/riscvtests/rv64mi-p/rv64mi-p-csr | less
+	riscv64-elf-objdump -Dzr /home/yyq/Projects/rocket/out/riscvtests/test/rv64mi-p/init.dest/rv64mi-p-access.elf | less
 
 smoke:
 	riscv64-elf-objdump -Dzr out/cases/smoketest/compile.dest/smoketest.elf | less
