@@ -266,9 +266,9 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
     LOG(INFO) << fmt::format("X[{}] = 0x{:08X}",7,state->XPR[7]);
     LOG(INFO) << fmt::format("a0 = 0x{:08X}",state->XPR[10]);
 //----------------------------DEBUG before execute------------------------------------------------------
-    if(pc_before == 0x800001C0) {
-      LOG(INFO) << fmt::format("stop");
-    }
+//    if(pc_before == 0x800001C0) {
+//      LOG(INFO) << fmt::format("stop");
+//    }
 
 //----------------------------------------------------------------------------------
 

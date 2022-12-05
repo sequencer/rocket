@@ -52,7 +52,7 @@ void SpikeEvent::log_arch_changes() {
 
   for (auto mem_write: state->log_mem_write) {
     uint64_t address = std::get<0>(mem_write);
-    uint64_t write_addr = address & 0xFFFFFFC0;
+    uint64_t addr_align = address & 0xFFFFFFC0;
     uint64_t value = std::get<1>(mem_write);
     // Byte size_bytes
     uint8_t size_by_byte = std::get<2>(mem_write);
@@ -61,14 +61,14 @@ void SpikeEvent::log_arch_changes() {
       uint64_t data = 0;
       //scan 8 bytes to data
       for (int j = 0; j < 8; ++j) {
-        data += (uint64_t) impl->load(write_addr + j + i*8) << (j * 8);
+        data += (uint64_t) impl->load(addr_align + j + i*8) << (j * 8);
       }
       //LOG(INFO) << fmt::format("Find insn: {:08X} , at:{:08X}",insn,addr + i*8);
       block.blocks[i] = data;
-      block.addr = address;
+      block.addr = addr_align;
       block.remaining = true;
     }
-    LOG(INFO) << fmt::format("spike detect mem write {:08X} on mem:{:08X} with size={}byte; block_addr={:08X}", value, address, size_by_byte,write_addr);
+    LOG(INFO) << fmt::format("spike detect mem write {:08X} on mem:{:08X} with size={}byte; block_addr={:08X}", value, address, size_by_byte,addr_align);
     mem_access_record.all_writes[address] = { .size_by_byte = size_by_byte, .val = value };
   }
   // since log_mem_read doesn't record mem data, we need to load manually
