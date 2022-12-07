@@ -255,26 +255,32 @@ object riscvtests extends Module{
           s"test suite ${name} from riscv-tests"
         }
 
-        def binaries = T {
+        def target = T.persistent {
           os.walk(untar().path).filter(p => p.last.startsWith(name())).filterNot(p => p.last.endsWith("dump")).map(PathRef(_))
         }
 // llvm-objcopy","-O", "binary", bin.path.last+".elf",bin.path.last+"-bin"
-        def init = T {
-          binaries().map(bin =>{
+        def init = T.persistent {
+          target().map(bin =>{
             os.proc("cp", bin.path, "./" + bin.path.last + ".elf").call(T.dest)
             os.proc("llvm-objcopy","-O", "binary", bin.path.last+".elf",bin.path.last).call(T.dest)
           })
-          T.dest
+          PathRef(T.dest)
         }
 
         def test = T {
           println("why")
 
-          binaries.map(a =>
+          target.map(a =>
             println("hello"))
           PathRef(T.dest)
         }
+
+        def binaries = T {
+          os.walk(init().path).filter(p => p.last.startsWith(name())).filterNot(p => p.last.endsWith("elf")).map(PathRef(_))
+        }
       }
+
+
 
       def commit = T.input {
         "047314c5b0525b86f7d5bb6ffe608f7a8b33ffdb"
@@ -1166,3 +1172,137 @@ object cosim extends Module {
     }
   }
 }
+
+object myrvtests extends Module {
+  trait Test extends TaskModule {
+    override def defaultCommandName() = "run"
+
+    def bin: T[Seq[PathRef]]
+
+//    def run(args: String*) = T.command {
+//      bin().map { c =>
+//        val proc = os.proc(Seq(cosim.emulator.elf().path.toString(), "--bin", c.path.toString, "--wave", (T.dest / "wave").toString) ++ args)
+//        T.log.info(s"run test: ${c.path.last} with:\n ${proc.command.map(_.value.mkString(" ")).mkString(" ")}")
+//        proc.call()
+//        c.path.last
+//      }
+//
+//
+//
+//
+//      PathRef(T.dest)
+//    }
+    def run(args: String*) = T.command {
+      bin().map { c =>
+        val name = c.path.last
+        val proc = os.proc(Seq(cosim.emulator.elf().path.toString(), "--bin", c.path.toString, "--wave", (T.dest / "wave").toString) ++ args)
+        T.log.info(s"run test: ${c.path.last} with:\n ${proc.command.map(_.value.mkString(" ")).mkString(" ")}")
+        val p = proc.call(stdout = T.dest / s"$name.running.log", mergeErrIntoOut = true)
+
+        PathRef(if (p.exitCode != 0) {
+          os.move(T.dest / s"$name.running.log", T.dest / s"$name.failed.log")
+          System.err.println(s"Test $name failed with exit code ${p.exitCode}")
+          T.dest / s"$name.failed.log"
+        } else {
+          os.move(T.dest / s"$name.running.log", T.dest / s"$name.passed.log")
+          T.dest / s"$name.passed.log"
+        })
+      }
+    }
+
+//    def report = T {
+//      val failed = run().filter(_.path.last.endsWith("failed.log"))
+//      assert(failed.isEmpty, s"tests failed in ${failed.map(_.path.last).mkString(", ")}")
+//    }
+  }
+
+  object smoketest extends Test {
+    def bin = Seq(cases.smoketest.compile())
+  }
+  object `rv64si-p` extends Test{
+    def bin = riscvtests.test.`rv64si-p`.binaries
+  }
+
+  object `rv64mi-p` extends Test {
+    def bin = riscvtests.test.`rv64mi-p`.binaries
+  }
+
+  object `rv64ua-p` extends Test {
+    def bin = riscvtests.test.`rv64ua-p`.binaries
+  }
+
+}
+
+// failed
+//object run extends Module {
+//  m =>
+//  trait RunableTest extends Module {
+//    /** emulator path */
+//    def elf: T[PathRef]
+//
+//    /** test bin path */
+//    def testcases: T[Seq[PathRef]]
+//
+//    /** run test implementation */
+//    def run = T {
+//      testcases().map { bin =>
+///*        val name = bin.path.last
+//        val p = os.proc(elf().path, bin.path).call(stdout = T.dest / s"$name.running.log", mergeErrIntoOut = true)
+//        PathRef(if (p.exitCode != 0) {
+//          os.move(T.dest / s"$name.running.log", T.dest / s"$name.failed.log")
+//          System.err.println(s"Test $name failed with exit code ${p.exitCode}")
+//          T.dest / s"$name.failed.log"
+//        } else {
+//          os.move(T.dest / s"$name.running.log", T.dest / s"$name.passed.log")
+//          T.dest / s"$name.passed.log"
+//        })*/
+//
+//        val name = bin.path.last
+//        os.proc("echo",name)
+//        name
+//      }
+//      T.dest
+//    }
+//
+///*    def report = T {
+//      val failed = run().filter(_.path.last.endsWith("failed.log"))
+//      assert(failed.isEmpty, s"tests failed in ${failed.map(_.path.last).mkString(", ")}")
+//    }*/
+//  }
+//
+//  /** rv64 test bundle
+//    *
+//    * run: run all the test
+//    */
+//  object rv64default extends Module {
+//    trait RunableTest extends m.RunableTest {
+//      def elf = T {
+//        cosim.emulator.elf()
+//      }
+//    }
+//
+//    def run = T {
+//      (
+//        `rv64si-p`.run()
+//        )
+//    }
+//
+///*    def report = T {
+//      val failed = run().filter(_.path.last.endsWith("failed.log"))
+//      assert(failed.isEmpty, s"tests failed in ${failed.map(_.path.last).mkString(", ")}")
+//    }*/
+//
+//
+//    object `rv64si-p` extends RunableTest {
+//      def testcases = riscvtests.test.`rv64si-p`.binaries
+//
+//      def test = T{
+//        os.proc("echo success")
+//        T.dest
+//      }
+//    }
+//
+//
+//  }
+//}
+
