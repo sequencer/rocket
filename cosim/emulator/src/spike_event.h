@@ -29,7 +29,7 @@ struct SpikeEvent {
 /*  void drive_rtl_req(VV &top) const;
   void drive_rtl_csr(VV &top) const;*/
 
-  /*void pre_log_arch_changes();*/
+  void pre_log_arch_changes();
   void log_arch_changes();
 
   commit_log_mem_t mem_read_info;
@@ -49,6 +49,7 @@ struct SpikeEvent {
   bool is_issued;
   bool is_committed;
 
+  uint8_t opcode;
   bool is_load;
   bool is_store;
   bool is_csr;
@@ -75,8 +76,12 @@ struct SpikeEvent {
   uint64_t satp_ppn;
   uint8_t satp_mode;
 
+  bool is_trap;
 
   Cacheblock block;
+
+  uint64_t target_mem;
+  std::list<Cacheblock> cache_queue;
 
 
 

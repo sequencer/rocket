@@ -132,9 +132,10 @@ void VBridgeImpl::run() {
   reset();
 
   // start loop
+  // queue size must > for trap insn to pop correct
   while (true) {
     loop_until_se_queue_full();
-    while(!to_rtl_queue.empty()){
+    while(to_rtl_queue.size()>1){
       return_fetch_response();
 
       top.clock = 1;
@@ -173,8 +174,17 @@ void VBridgeImpl::run() {
         // ---------------------------------------------------------------------------------------------------
         // commit spike event
         bool commit = false;
+
         for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
+
           if(se_iter->pc == pc){
+            // mechanism for commit trap insn
+            // trap insn will commit with trap vector first insn; demanding the trap insn not to be the last one in the queue
+            if(se_iter->pc == 0x80000004){
+              for (auto se_it = to_rtl_queue.rbegin(); se_it != to_rtl_queue.rend(); se_it++) {
+                if(se_it->is_trap) se_it->is_committed = true;
+              }
+            }
             commit = true;
             se_iter->is_committed = true;
             LOG(INFO) << fmt::format("Set spike {:08X} as committed",se_iter->pc);
@@ -279,7 +289,8 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
     // if a insn_after_pc = 0x80000004,set it as committed
     // set whose insn which traps committed in case queue stalls
     if (state->pc == 0x80000004){
-      se.is_committed = true;
+      se.is_trap = true;
+      LOG(INFO) << fmt::format("Trap! happens at pc = {:08X} ",pc_before);
     }
 
     LOG(INFO) << fmt::format("Spike after execute pc={:08X} ",state->pc);
@@ -505,7 +516,7 @@ void VBridgeImpl::receive_tl_req() {
 
     case TlOpcode::AcquireBlock:{
       cnt = 1;
-      LOG(INFO) << fmt::format("Find AcquireBlock");
+      LOG(INFO) << fmt::format("Find AcquireBlock for mem = {:08X}",addr);
       for(int i=0; i<8 ; i++){
         uint64_t data = 0;
         for (int j = 0; j < 8; ++j) {

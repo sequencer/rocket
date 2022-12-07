@@ -12,14 +12,10 @@ std::string SpikeEvent::describe_insn() const {
   return fmt::format("pc={:08X}, bits={:08X}, disasm='{}'", pc, inst_bits, proc.get_disassembler()->disassemble(inst_bits));
 }
 
-/*void SpikeEvent::pre_log_arch_changes() {
-  rd_bits = proc.get_state()->XPR[rd_idx];
-  // uint8_t *vd_bits_start = &proc.VU.elt<uint8_t>(rd_idx, 0);
-  // CHECK_LT_S(vlmul, 4) << ": fractional vlmul not supported yet";  // TODO: support fractional vlmul
-  // uint32_t len = consts::vlen_in_bits << vlmul / 8;
-  vd_write_record.vd_bytes = std::make_unique<uint8_t[]>(len);
-  std::memcpy(vd_write_record.vd_bytes.get(), vd_bits_start, len);
-}*/
+void SpikeEvent::pre_log_arch_changes() {
+
+
+}
 
 void SpikeEvent::log_arch_changes() {
 
@@ -52,6 +48,9 @@ void SpikeEvent::log_arch_changes() {
 
   for (auto mem_write: state->log_mem_write) {
     uint64_t address = std::get<0>(mem_write);
+    if(address != target_mem){
+      LOG(FATAL) << fmt::format("Error! spike detect mem_write at= {:08X}; target mem = {:08X}", address,target_mem);
+    }
     uint64_t addr_align = address & 0xFFFFFFC0;
     uint64_t value = std::get<1>(mem_write);
     // Byte size_bytes
@@ -74,9 +73,11 @@ void SpikeEvent::log_arch_changes() {
   // since log_mem_read doesn't record mem data, we need to load manually
   for (auto mem_read: state->log_mem_read) {
     uint64_t address = std::get<0>(mem_read);
+    if(address != target_mem){
+      LOG(FATAL) << fmt::format("Error! spike detect mem_read at= {:08X}; target mem = {:08X}", address,target_mem);
+    }
     // mem block start addr
     uint64_t addr_align = address & 0xFFFFFFC0;
-    LOG(INFO) << fmt::format("addr_align = {:08X}", addr_align);
     // Byte size_bytes
     uint8_t size_by_byte = std::get<2>(mem_read);
     uint64_t value = 0;
@@ -133,13 +134,14 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
 
   pc = proc.get_state()->pc;
   inst_bits = fetch.insn.bits();
-  uint8_t opcode = clip(inst_bits, 0, 6);
-  is_load = opcode == 0b111;
+  opcode = clip(inst_bits, 0, 6);
+  is_load = opcode == 0b11;
   is_store = opcode == 0b100011;
   is_csr = opcode == 0b1110011;
 
   is_issued = false;
   is_committed = false;
+  is_trap = false;
 
   satp = proc.get_state()->satp->read();
   satp_ppn = satp & 0xFFFFFFFFFFF;
@@ -148,6 +150,15 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
   block.addr = -1;
 
   disasm = proc.get_disassembler()->disassemble(fetch.insn);
+
+  target_mem = -1;
+  if(is_load){
+    target_mem = rs1_bits + fetch.insn.i_imm();
+    LOG(INFO) << fmt::format("find load mem addr = {:08X}",target_mem );
+
+  }
+  if(is_store) target_mem = rs1_bits + fetch.insn.s_imm();
+
 
 
 }

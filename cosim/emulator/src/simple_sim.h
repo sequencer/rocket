@@ -42,7 +42,7 @@ public:
       }
 
       //print mem
-      uint32_t addr = 0x1000;
+      uint32_t addr = 0x80002000;
       for(int i=0; i<4 ; i++){
         uint32_t insn = 0;
         for (int j = 0; j < 4; j++) {
