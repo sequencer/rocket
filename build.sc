@@ -234,34 +234,6 @@ object diplomatic extends common.DiplomaticModule {
   }
 }
 
-/** compile smoke test program */
-object cases extends Module {
-  trait Case extends Module {
-    def name: T[String] = millSourcePath.last
-    def sources = T.sources { millSourcePath }
-    def allSourceFiles = T { Lib.findSourceFiles(sources(), Seq("S", "s", "c", "cpp")).map(PathRef(_)) }
-    def linkScript: T[PathRef] = T {
-      os.write(T.ctx.dest / "linker.ld", s"""
-                                            |SECTIONS
-                                            |{
-                                            |  . = 0x1000;
-                                            |  .text.start : { *(.text.start) }
-                                            |}
-                                            |""".stripMargin)
-      PathRef(T.ctx.dest / "linker.ld")
-    }
-    def compile: T[PathRef] = T {
-      os.proc(Seq("clang", "-o", name() + ".elf" ,"--target=riscv64", "-march=rv64gc", s"-L${musl.compile().path}/lib", s"-L${compilerrt.compile().path}/lib/riscv64", "-mno-relax", s"-T${linkScript().path}") ++ allSourceFiles().map(_.path.toString)).call(T.ctx.dest)
-      os.proc(Seq("llvm-objcopy", "-O", "binary", "--only-section=.text", name() + ".elf", name())).call(T.ctx.dest)
-      T.log.info(s"${name()} is generated in ${T.dest},\n")
-      PathRef(T.ctx.dest / name())
-    }
-  }
-  object smoketest extends Case
-
-  object entrance extends Case
-}
-
 object riscvtests extends Module{
 
     c =>
@@ -958,9 +930,35 @@ object tests extends Module {
       }
     }
   }
-
 }
 
+/** compile smoke test program */
+object cases extends Module {
+  trait Case extends Module {
+    def name: T[String] = millSourcePath.last
+    def sources = T.sources { millSourcePath }
+    def allSourceFiles = T { Lib.findSourceFiles(sources(), Seq("S", "s", "c", "cpp")).map(PathRef(_)) }
+    def linkScript: T[PathRef] = T {
+      os.write(T.ctx.dest / "linker.ld", s"""
+                                            |SECTIONS
+                                            |{
+                                            |  . = 0x1000;
+                                            |  .text.start : { *(.text.start) }
+                                            |}
+                                            |""".stripMargin)
+      PathRef(T.ctx.dest / "linker.ld")
+    }
+    def compile: T[PathRef] = T {
+      os.proc(Seq("clang", "-o", name() + ".elf" ,"--target=riscv64", "-march=rv64gc", s"-L${musl.compile().path}/lib", s"-L${compilerrt.compile().path}/lib/riscv64", "-mno-relax", s"-T${linkScript().path}") ++ allSourceFiles().map(_.path.toString)).call(T.ctx.dest)
+      os.proc(Seq("llvm-objcopy", "-O", "binary", "--only-section=.text", name() + ".elf", name())).call(T.ctx.dest)
+      T.log.info(s"${name()} is generated in ${T.dest},\n")
+      PathRef(T.ctx.dest / name())
+    }
+  }
+  object smoketest extends Case
+
+  object entrance extends Case
+}
 /** run rocket test*/
 object mytests extends Module {
   trait Test extends TaskModule {

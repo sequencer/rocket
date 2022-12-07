@@ -26,8 +26,7 @@ public:
     void load(const std::string &fname, size_t reset_vector) {
       std::ifstream fs(fname, std::ifstream::binary);
       assert(fs.is_open());
-
-      size_t offset = 0x80000000;
+      size_t offset = reset_vector;
       while (!fs.eof()) {
         fs.read(&mem[offset], 1024);
         offset += fs.gcount();
