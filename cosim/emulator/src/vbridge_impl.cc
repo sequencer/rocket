@@ -283,6 +283,7 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
 //----------------------------------------------------------------------------------
 
     auto &se = event.value();
+    se.pre_log_arch_changes();
     proc.step(1);
     se.log_arch_changes();
     // todo: detect exactly the trap
@@ -366,7 +367,7 @@ void VBridgeImpl::record_rf_access() {
         //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
         LOG(INFO) << fmt::format("List: spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
       }
-      LOG(FATAL) << fmt::format("RTL rf_write Cannot find se ; pc = {:08X} , insn={:08X}",pc,insn);
+      LOG(FATAL) << fmt::format("RTL rf_write Cannot find se ; pc = {:08X} , insn={:08X}, waddr={:08X}",pc,insn,waddr);
     }
 
     // start to check RTL rf_write with spike event
@@ -432,8 +433,6 @@ void VBridgeImpl::receive_tl_req() {
           aquire_banks[i].source = src;
           aquire_banks[i].remaining = true;
         }
-
-
       }
 
     }

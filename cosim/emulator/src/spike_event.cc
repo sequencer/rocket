@@ -13,7 +13,24 @@ std::string SpikeEvent::describe_insn() const {
 }
 
 void SpikeEvent::pre_log_arch_changes() {
-
+  if(is_store | is_load | is_amo){
+    uint64_t address = target_mem;
+    uint64_t addr_align = address & 0xFFFFFFC0;
+    // record mem block for cache
+    for(int i=0; i<8 ; i++){
+      uint64_t data = 0;
+      //scan 8 bytes to data
+      for (int j = 0; j < 8; ++j) {
+        data += (uint64_t) impl->load(addr_align + j + i*8) << (j * 8);
+      }
+      //LOG(INFO) << fmt::format("Find insn: {:08X} , at:{:08X}",insn,addr + i*8);
+      block.blocks[i] = data;
+      block.addr = addr_align;
+      block.remaining = true;
+    }
+    LOG(INFO) << fmt::format("spike pre-detect mem access on:{:08X} ; block_addr={:08X}", address,addr_align);
+    LOG(INFO) << fmt::format("is_amo = {}", is_amo);
+  }
 
 }
 
@@ -51,23 +68,23 @@ void SpikeEvent::log_arch_changes() {
     if(address != target_mem){
       LOG(FATAL) << fmt::format("Error! spike detect mem_write at= {:08X}; target mem = {:08X}", address,target_mem);
     }
-    uint64_t addr_align = address & 0xFFFFFFC0;
+    //uint64_t addr_align = address & 0xFFFFFFC0;
     uint64_t value = std::get<1>(mem_write);
     // Byte size_bytes
     uint8_t size_by_byte = std::get<2>(mem_write);
     // record mem block for cache
-    for(int i=0; i<8 ; i++){
-      uint64_t data = 0;
-      //scan 8 bytes to data
-      for (int j = 0; j < 8; ++j) {
-        data += (uint64_t) impl->load(addr_align + j + i*8) << (j * 8);
-      }
-      //LOG(INFO) << fmt::format("Find insn: {:08X} , at:{:08X}",insn,addr + i*8);
-      block.blocks[i] = data;
-      block.addr = addr_align;
-      block.remaining = true;
-    }
-    LOG(INFO) << fmt::format("spike detect mem write {:08X} on mem:{:08X} with size={}byte; block_addr={:08X}", value, address, size_by_byte,addr_align);
+//    for(int i=0; i<8 ; i++){
+//      uint64_t data = 0;
+//      //scan 8 bytes to data
+//      for (int j = 0; j < 8; ++j) {
+//        data += (uint64_t) impl->load(addr_align + j + i*8) << (j * 8);
+//      }
+//      //LOG(INFO) << fmt::format("Find insn: {:08X} , at:{:08X}",insn,addr + i*8);
+//      block.blocks[i] = data;
+//      block.addr = addr_align;
+//      block.remaining = true;
+//    }
+    LOG(INFO) << fmt::format("spike detect mem write {:08X} on mem:{:08X} with size={}byte", value, address, size_by_byte);
     mem_access_record.all_writes[address] = { .size_by_byte = size_by_byte, .val = value };
   }
   // since log_mem_read doesn't record mem data, we need to load manually
@@ -77,7 +94,7 @@ void SpikeEvent::log_arch_changes() {
       LOG(FATAL) << fmt::format("Error! spike detect mem_read at= {:08X}; target mem = {:08X}", address,target_mem);
     }
     // mem block start addr
-    uint64_t addr_align = address & 0xFFFFFFC0;
+    //uint64_t addr_align = address & 0xFFFFFFC0;
     // Byte size_bytes
     uint8_t size_by_byte = std::get<2>(mem_read);
     uint64_t value = 0;
@@ -86,21 +103,21 @@ void SpikeEvent::log_arch_changes() {
       value += (uint64_t) impl->load(address + i) << (i * 8);
     }
     // record mem block for cache
-    for(int i=0; i<8 ; i++){
-      uint64_t data = 0;
-      //scan 8 bytes to data
-      for (int j = 0; j < 8; ++j) {
-        data += (uint64_t) impl->load(addr_align + j + i*8) << (j * 8);
-      }
-      //LOG(INFO) << fmt::format("Find insn: {:08X} , at:{:08X}",insn,addr + i*8);
-      block.blocks[i] = data;
-      block.addr = addr_align;
-      block.remaining = true;
-    }
+//    for(int i=0; i<8 ; i++){
+//      uint64_t data = 0;
+//      //scan 8 bytes to data
+//      for (int j = 0; j < 8; ++j) {
+//        data += (uint64_t) impl->load(addr_align + j + i*8) << (j * 8);
+//      }
+//      //LOG(INFO) << fmt::format("Find insn: {:08X} , at:{:08X}",insn,addr + i*8);
+//      block.blocks[i] = data;
+//      block.addr = addr_align;
+//      block.remaining = true;
+//    }
 
 
 
-    LOG(INFO) << fmt::format("spike detect mem read {:08X} on mem:{:08X} with size={}byte; block_addr={:08X}", value, address, size_by_byte,block.addr);
+    LOG(INFO) << fmt::format("spike detect mem read {:08X} on mem:{:08X} with size={}byte", value, address, size_by_byte);
     mem_access_record.all_reads[address] = { .size_by_byte = size_by_byte, .val = value };
   }
 
@@ -138,6 +155,7 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
   is_load = opcode == 0b11;
   is_store = opcode == 0b100011;
   is_csr = opcode == 0b1110011;
+  is_amo = opcode == 0b0101111;
 
   is_issued = false;
   is_committed = false;
@@ -158,6 +176,7 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
 
   }
   if(is_store) target_mem = rs1_bits + fetch.insn.s_imm();
+  if(is_amo) target_mem = rs1_bits;
 
 
 

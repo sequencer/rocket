@@ -1231,78 +1231,19 @@ object myrvtests extends Module {
     def bin = riscvtests.test.`rv64ua-p`.binaries
   }
 
+  object `rv64ua-v` extends Test {
+    def bin = riscvtests.test.`rv64ua-v`.binaries
+  }
+
+  object `rv64uc-p` extends Test {
+    def bin = riscvtests.test.`rv64uc-p`.binaries
+  }
+
+  object `rv64uc-v` extends Test {
+    def bin = riscvtests.test.`rv64uc-v`.binaries
+  }
+
 }
 
-// failed
-//object run extends Module {
-//  m =>
-//  trait RunableTest extends Module {
-//    /** emulator path */
-//    def elf: T[PathRef]
-//
-//    /** test bin path */
-//    def testcases: T[Seq[PathRef]]
-//
-//    /** run test implementation */
-//    def run = T {
-//      testcases().map { bin =>
-///*        val name = bin.path.last
-//        val p = os.proc(elf().path, bin.path).call(stdout = T.dest / s"$name.running.log", mergeErrIntoOut = true)
-//        PathRef(if (p.exitCode != 0) {
-//          os.move(T.dest / s"$name.running.log", T.dest / s"$name.failed.log")
-//          System.err.println(s"Test $name failed with exit code ${p.exitCode}")
-//          T.dest / s"$name.failed.log"
-//        } else {
-//          os.move(T.dest / s"$name.running.log", T.dest / s"$name.passed.log")
-//          T.dest / s"$name.passed.log"
-//        })*/
-//
-//        val name = bin.path.last
-//        os.proc("echo",name)
-//        name
-//      }
-//      T.dest
-//    }
-//
-///*    def report = T {
-//      val failed = run().filter(_.path.last.endsWith("failed.log"))
-//      assert(failed.isEmpty, s"tests failed in ${failed.map(_.path.last).mkString(", ")}")
-//    }*/
-//  }
-//
-//  /** rv64 test bundle
-//    *
-//    * run: run all the test
-//    */
-//  object rv64default extends Module {
-//    trait RunableTest extends m.RunableTest {
-//      def elf = T {
-//        cosim.emulator.elf()
-//      }
-//    }
-//
-//    def run = T {
-//      (
-//        `rv64si-p`.run()
-//        )
-//    }
-//
-///*    def report = T {
-//      val failed = run().filter(_.path.last.endsWith("failed.log"))
-//      assert(failed.isEmpty, s"tests failed in ${failed.map(_.path.last).mkString(", ")}")
-//    }*/
-//
-//
-//    object `rv64si-p` extends RunableTest {
-//      def testcases = riscvtests.test.`rv64si-p`.binaries
-//
-//      def test = T{
-//        os.proc("echo success")
-//        T.dest
-//      }
-//    }
-//
-//
-//  }
-//}
+
 
