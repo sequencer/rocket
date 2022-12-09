@@ -1219,60 +1219,67 @@ object myrvtests extends Module {
   object smoketest extends Test {
     def bin = Seq(cases.smoketest.compile())
   }
-  object `rv64si-p` extends Test{
-    def bin = riscvtests.test.`rv64si-p`.binaries
+    object `rv64si-p` extends Test {
+      def bin = riscvtests.test.`rv64si-p`.binaries
+    }
+
+    object `rv64mi-p` extends Test {
+      def bin = riscvtests.test.`rv64mi-p`.binaries
+    }
+
+    object `rv64ua-p` extends Test {
+      def bin = riscvtests.test.`rv64ua-p`.binaries
+    }
+
+    object `rv64ua-v` extends Test {
+      def bin = riscvtests.test.`rv64ua-v`.binaries
+    }
+
+    object `rv64uc-p` extends Test {
+      def bin = riscvtests.test.`rv64uc-p`.binaries
+    }
+
+    object `rv64uc-v` extends Test {
+      def bin = riscvtests.test.`rv64uc-v`.binaries
+    }
+
+    object `rv64ud-p` extends Test {
+      def bin = riscvtests.test.`rv64ud-p`.binaries
+    }
+
+    object `rv64ud-v` extends Test {
+      def bin = riscvtests.test.`rv64ud-v`.binaries
+    }
+
+    object `rv64uf-p` extends Test {
+      def bin = riscvtests.test.`rv64uf-p`.binaries
+    }
+
+    object `rv64uf-v` extends Test {
+      def bin = riscvtests.test.`rv64uf-v`.binaries
+    }
+
+    object `rv64ui-p` extends Test {
+      def bin = riscvtests.test.`rv64ui-p`.binaries
+    }
+
+    object `rv64ui-v` extends Test {
+      def bin = riscvtests.test.`rv64ui-v`.binaries
+    }
+
+    object `rv64uzfh-p` extends Test {
+      def bin = riscvtests.test.`rv64uzfh-p`.binaries
+    }
+
+    object `rv64uzfh-v` extends Test {
+      def bin = riscvtests.test.`rv64uzfh-p`.binaries
+    }
+  object `rv64um-p` extends Test {
+    def bin = riscvtests.test.`rv64um-p`.binaries
   }
 
-  object `rv64mi-p` extends Test {
-    def bin = riscvtests.test.`rv64mi-p`.binaries
-  }
-
-  object `rv64ua-p` extends Test {
-    def bin = riscvtests.test.`rv64ua-p`.binaries
-  }
-
-  object `rv64ua-v` extends Test {
-    def bin = riscvtests.test.`rv64ua-v`.binaries
-  }
-
-  object `rv64uc-p` extends Test {
-    def bin = riscvtests.test.`rv64uc-p`.binaries
-  }
-
-  object `rv64uc-v` extends Test {
-    def bin = riscvtests.test.`rv64uc-v`.binaries
-  }
-
-  object `rv64ud-p` extends Test {
-    def bin = riscvtests.test.`rv64ud-p`.binaries
-  }
-
-  object `rv64ud-v` extends Test {
-    def bin = riscvtests.test.`rv64ud-v`.binaries
-  }
-
-  object `rv64uf-p` extends Test {
-    def bin = riscvtests.test.`rv64uf-p`.binaries
-  }
-
-  object `rv64uf-v` extends Test {
-    def bin = riscvtests.test.`rv64uf-v`.binaries
-  }
-
-  object `rv64ui-p` extends Test {
-    def bin = riscvtests.test.`rv64ui-p`.binaries
-  }
-
-  object `rv64ui-v` extends Test {
-    def bin = riscvtests.test.`rv64ui-v`.binaries
-  }
-
-  object `rv64uzfh-p` extends Test {
-    def bin = riscvtests.test.`rv64uzfh-p`.binaries
-  }
-
-  object `rv64uzfh-v` extends Test {
-    def bin = riscvtests.test.`rv64uzfh-p`.binaries
+  object `rv64um-v` extends Test {
+    def bin = riscvtests.test.`rv64um-v`.binaries
   }
 
 }
