@@ -51,7 +51,7 @@ void SpikeEvent::log_arch_changes() {
       if (rd_new_bits != rd_should_be_bits ) {
         rd_new_bits = rd_should_be_bits;
         is_rd_written = true;
-        //LOG(INFO) << fmt::format("Log Spike {:08X} with scalar rf change: x[{}] from {:08X} to {:08X}", pc, rd_idx, rd_old_bits, rd_new_bits);
+        LOG(INFO) << fmt::format("Log Spike {:08X} with scalar rf change: x[{}] from {:08X} to {:08X}", pc, rd_idx, rd_old_bits, rd_new_bits);
       }
     }
 //    else if((write_idx & 0xf) == 0b0100){
@@ -166,7 +166,8 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
     }
     // for integer/double load/store
     is_load = (opcode == 0b11) || (opcode == 0b0000111);
-    is_store = opcode == 0b100011|| (opcode == 0b0100111);
+    is_store = opcode == 0b100011 || (opcode == 0b0100111);
+    is_amo = opcode == 0b0101111;
 
     if(is_load){
       target_mem = rs1_bits + fetch.insn.i_imm();
@@ -278,7 +279,7 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
   rd_old_bits = proc.get_state()->XPR[rd_idx];
 
   is_csr = opcode == 0b1110011;
-  is_amo = opcode == 0b0101111;
+
 
   is_issued = false;
   is_trap = false;
