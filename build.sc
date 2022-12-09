@@ -276,7 +276,7 @@ object riscvtests extends Module{
         }
 
         def binaries = T {
-          os.walk(init().path).filter(p => p.last.startsWith(name())).filterNot(p => p.last.endsWith("elf")).map(PathRef(_))
+          os.walk(init().path).filter(p => p.last.startsWith(name())).filterNot(p => p.last.endsWith("elf")).filterNot(p => p.last.endsWith("rv64mi-p-csr")).filterNot(p => p.last.endsWith("rv64mi-p-breakpoint")).map(PathRef(_))
         }
       }
 
