@@ -1195,7 +1195,7 @@ object myrvtests extends Module {
     def run(args: String*) = T.command {
       bin().map { c =>
         val name = c.path.last
-        val proc = os.proc(Seq(cosim.emulator.elf().path.toString(), "--bin", c.path.toString, "--wave", (T.dest / "wave").toString) ++ args)
+        val proc = os.proc(Seq(cosim.emulator.elf().path.toString(), "--entrance",cases.entrance.compile().path.toString(),"--bin", c.path.toString, "--wave", (T.dest / "wave").toString) ++ args)
         T.log.info(s"run test: ${c.path.last} with:\n ${proc.command.map(_.value.mkString(" ")).mkString(" ")}")
         val p = proc.call(stdout = T.dest / s"$name.running.log", mergeErrIntoOut = true)
 

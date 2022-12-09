@@ -36,7 +36,7 @@ VBridgeImpl::VBridgeImpl() :
 
 void VBridgeImpl::setup(const std::string &_bin, const std::string &_ebin,const std::string &_wave, uint64_t _reset_vector, uint64_t cycles) {
   this->bin = _bin;
-  this->ebin = _bin;
+  this->ebin = _ebin;
   this->wave = _wave;
   this->reset_vector = _reset_vector;
   this->timeout = cycles;
@@ -92,7 +92,7 @@ void VBridgeImpl::init_spike() {
   // load binary to reset_vector
 //  uint64_t e = 0x1000;
 //  sim.load(ebin, e);
-  sim.load(bin, reset_vector);
+  sim.load(bin,ebin, reset_vector);
 
 }
 

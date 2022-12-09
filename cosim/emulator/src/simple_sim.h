@@ -23,7 +23,7 @@ public:
       delete[] mem;
     }
 
-    void load(const std::string &fname, size_t reset_vector) {
+    void load(const std::string &fname, const std::string &ename,size_t reset_vector) {
       std::ifstream fs(fname, std::ifstream::binary);
       assert(fs.is_open());
       size_t offset = reset_vector;
@@ -32,9 +32,7 @@ public:
         offset += fs.gcount();
       }
 
-
-
-      std::ifstream fs_init("/home/yyq/Projects/rocket/out/cases/entrance/compile.dest/entrance", std::ifstream::binary);
+      std::ifstream fs_init(ename, std::ifstream::binary);
       assert(fs_init.is_open());
       size_t cnt = 0x1000;
       while (!fs_init.eof()) {
@@ -50,8 +48,6 @@ public:
         }
         LOG(INFO) << fmt::format("scan mem: {:08X} , at:{:08X}",insn,addr + i*4);
       }
-
-
     }
 
     // should return NULL for MMIO addresses
