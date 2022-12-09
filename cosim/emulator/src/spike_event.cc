@@ -28,8 +28,7 @@ void SpikeEvent::pre_log_arch_changes() {
       block.addr = addr_align;
       block.remaining = true;
     }
-    LOG(INFO) << fmt::format("spike pre-detect mem access on:{:08X} ; block_addr={:08X}", address,addr_align);
-    LOG(INFO) << fmt::format("is_amo = {}", is_amo);
+    LOG(INFO) << fmt::format("spike pre_log mem access on:{:08X} ; block_addr={:08X}", address,addr_align);
   }
 
 }
@@ -144,16 +143,134 @@ void SpikeEvent::log_arch_changes() {
 
 SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl): proc(proc), impl(impl) {
   auto &xr = proc.get_state()->XPR;
-  rs1_bits = xr[fetch.insn.rs1()];
-  rs2_bits = xr[fetch.insn.rs2()];
-  rd_idx = fetch.insn.rd();
-  rd_old_bits = proc.get_state()->XPR[rd_idx];
-
   pc = proc.get_state()->pc;
   inst_bits = fetch.insn.bits();
-  opcode = clip(inst_bits, 0, 6);
-  is_load = opcode == 0b11;
-  is_store = opcode == 0b100011;
+  target_mem = -1;
+
+  // extension depending parameter
+  is_compress = false;
+  if(fetch.insn.length() == 2){
+    is_compress = true;
+    LOG(INFO) << fmt::format("find compress insn!");
+  }
+  if(!is_compress){
+    rs1_bits = xr[fetch.insn.rs1()];
+    rs2_bits = xr[fetch.insn.rs2()];
+    rd_idx = fetch.insn.rd();
+    opcode = clip(inst_bits, 0, 6);
+    // for integer/double load/store
+    is_load = (opcode == 0b11) || (opcode == 0b0000111);
+    is_store = opcode == 0b100011|| (opcode == 0b0100111);
+
+    if(is_load){
+      target_mem = rs1_bits + fetch.insn.i_imm();
+      // LOG(INFO) << fmt::format("find load mem addr = {:08X}",target_mem );
+    }
+    if(is_store) target_mem = rs1_bits + fetch.insn.s_imm();
+    if(is_amo) target_mem = rs1_bits;
+  }else{
+    uint8_t op = inst_bits & 0b11;
+    uint8_t func3 = (inst_bits & 0xE000)>>13;
+    uint64_t rs1s_bits = xr[fetch.insn.rvc_rs1s()];
+    uint64_t sp_bits = xr[2];
+    switch(op){
+      case 0 :
+        rd_idx = 8 + ((inst_bits & 0b11100) >> 2); // todo: rd_idx for store insn?
+        if(func3>=5) {
+          is_store = true;
+          switch(func3){
+            case 5://C.FSD
+              target_mem = rs1s_bits + fetch.insn.rvc_ld_imm();
+              break;
+            case 6:// C.SW
+              target_mem = rs1s_bits + fetch.insn.rvc_lw_imm();
+              break;
+            case 7:// C.SD
+              target_mem = rs1s_bits + fetch.insn.rvc_ld_imm();
+              break;
+            default:
+              LOG(FATAL) << fmt::format("unknown compress func3");
+          }
+        }
+        else if(func3>=1 && func3<=3){// include all 0-> the illegal insn
+          is_load = true;
+          switch(func3){
+            case 1://C.FLD
+              target_mem = rs1s_bits + fetch.insn.rvc_ld_imm();
+              break;
+            case 2:// C.LW
+              target_mem = rs1s_bits + fetch.insn.rvc_lw_imm();
+              break;
+            case 3:// C.LD
+              target_mem = rs1s_bits + fetch.insn.rvc_ld_imm();
+              break;
+            default:
+              LOG(FATAL) << fmt::format("unknown compress func3");
+          }
+        }
+        else{
+        }
+        // for store insn, no matter rd_idx
+        break;
+      case 1 :// no load/store insn; 2 types rd_idx format
+        if(func3<=3) rd_idx = fetch.insn.rd();
+        else {
+          rd_idx = fetch.insn.rvc_rs1s();
+        }
+        break;
+      case 2 :
+        if(func3>=5) {
+          is_store = true;
+          rd_idx = 0;// todo: set rd_idx to 0
+          switch (func3) {
+            case 5://C.FSDSP
+              target_mem = sp_bits + fetch.insn.rvc_sdsp_imm();
+              break;
+            case 6:// C.SWSP
+              target_mem = sp_bits + fetch.insn.rvc_swsp_imm();
+              break;
+            case 7: // C.SDSP
+              target_mem = sp_bits + fetch.insn.rvc_sdsp_imm();
+              break;
+            default:
+              LOG(FATAL) << fmt::format("unknown compress func3");
+          }
+        }
+        else if(func3>=1 && func3<=3){// for C.LWSP etc.
+          is_load = true;
+          rd_idx = fetch.insn.rd();
+          switch (func3) {
+            case 1://C.FLDSP
+              target_mem = sp_bits + fetch.insn.rvc_ldsp_imm();
+              break;
+            case 2://C.LWSP
+              target_mem = sp_bits + fetch.insn.rvc_lwsp_imm();
+              break;
+            case 3://C.LDSP
+              target_mem = sp_bits + fetch.insn.rvc_ldsp_imm();
+              break;
+            default:
+              LOG(FATAL) << fmt::format("unknown compress func3");
+          }
+
+        }else if(func3 == 4 && (((inst_bits & 0x1000)>>12)== 1) && (fetch.insn.rvc_rs1()!=0) && (fetch.insn.rvc_rs2()==0)){
+          // C.JALR
+          LOG(INFO) << fmt::format("find C.JALR");
+          rd_idx = 1;// write x2
+
+        }
+        else{
+          rd_idx = fetch.insn.rd();
+        }
+        break;
+      default:
+        LOG(FATAL) << fmt::format("unknown compress opcode");
+    }
+  }
+
+
+  rd_old_bits = proc.get_state()->XPR[rd_idx];
+
   is_csr = opcode == 0b1110011;
   is_amo = opcode == 0b0101111;
 
@@ -169,46 +286,6 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
 
   disasm = proc.get_disassembler()->disassemble(fetch.insn);
 
-  target_mem = -1;
-  if(is_load){
-    target_mem = rs1_bits + fetch.insn.i_imm();
-    LOG(INFO) << fmt::format("find load mem addr = {:08X}",target_mem );
-
-  }
-  if(is_store) target_mem = rs1_bits + fetch.insn.s_imm();
-  if(is_amo) target_mem = rs1_bits;
-
-
-
 }
 
 
-
-
-
-/*void SpikeEvent::check_is_ready_for_commit() {
-  for (auto &[addr, mem_write]: mem_access_record.all_writes) {
-    if (!mem_write.executed) {
-      LOG(FATAL) << fmt::format("expect to write mem {:08X}, not executed when commit ({})",
-                                addr, pc, describe_insn());
-    }
-  }
-  for (auto &[addr, mem_read]: mem_access_record.all_reads) {
-    if (!mem_read.executed) {
-      LOG(FATAL) << fmt::format("expect to read mem {:08X}, not executed when commit ({})",
-                                addr, describe_insn());
-    }
-  }
-  for (auto &[idx, vrf_write]: vrf_access_record.all_writes) {
-    CHECK_S(vrf_write.executed) << fmt::format("expect to write vrf {}, not executed when commit ({})",
-                              idx, describe_insn());
-  }
-}*/
-
-/*void SpikeEvent::record_rd_write(VV &top) {
-  // TODO: rtl should indicate whether resp_bits_data is valid
-  if (is_rd_written) {
-    CHECK_EQ_S(top.resp_bits_data, rd_bits) << fmt::format(": expect to write rd[{}] = {}, actual {}",
-                                                             rd_idx, rd_bits, top.resp_bits_data);
-  }
-}*/

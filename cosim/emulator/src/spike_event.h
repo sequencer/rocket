@@ -61,6 +61,7 @@ struct SpikeEvent {
 
   uint64_t pc;
   uint32_t inst_bits;
+  bool is_compress;
 
   // scalar to vector interface(used for driver)
   uint32_t rs1_bits;
