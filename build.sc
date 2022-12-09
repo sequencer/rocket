@@ -276,7 +276,7 @@ object riscvtests extends Module{
         }
 
         def binaries = T {
-          os.walk(init().path).filter(p => p.last.startsWith(name())).filterNot(p => p.last.endsWith("elf")).filterNot(p => p.last.endsWith("rv64mi-p-csr")).filterNot(p => p.last.endsWith("rv64mi-p-breakpoint")).map(PathRef(_))
+          os.walk(init().path).filter(p => p.last.startsWith(name())).filterNot(p => p.last.endsWith("elf")).filterNot(p => p.last.endsWith("rv64mi-p-csr")).filterNot(p => p.last.endsWith("rv64mi-p-breakpoint")).filterNot(p => p.last.startsWith("rv64um")).map(PathRef(_))
         }
       }
 
@@ -386,6 +386,8 @@ object riscvtests extends Module{
       object `rv64uzfh-p` extends Suite
 
       object `rv64uzfh-v` extends Suite
+
+      object `rv64` extends Suite
     }
 
 
@@ -961,7 +963,19 @@ object cases extends Module {
       PathRef(T.ctx.dest / name())
     }
   }
-  object smoketest extends Case
+  object smoketest extends Case{
+    override def linkScript: T[PathRef] = T {
+      os.write(T.ctx.dest / "linker.ld",
+        s"""
+           |SECTIONS
+           |{
+           |  . = 0x80000000;
+           |  .text.start : { *(.text.start) }
+           |}
+           |""".stripMargin)
+      PathRef(T.ctx.dest / "linker.ld")
+    }
+  }
 
   object entrance extends Case
 }
@@ -1174,24 +1188,12 @@ object cosim extends Module {
 }
 
 object myrvtests extends Module {
+  
   trait Test extends TaskModule {
     override def defaultCommandName() = "run"
 
     def bin: T[Seq[PathRef]]
 
-//    def run(args: String*) = T.command {
-//      bin().map { c =>
-//        val proc = os.proc(Seq(cosim.emulator.elf().path.toString(), "--bin", c.path.toString, "--wave", (T.dest / "wave").toString) ++ args)
-//        T.log.info(s"run test: ${c.path.last} with:\n ${proc.command.map(_.value.mkString(" ")).mkString(" ")}")
-//        proc.call()
-//        c.path.last
-//      }
-//
-//
-//
-//
-//      PathRef(T.dest)
-//    }
     def run(args: String*) = T.command {
       bin().map { c =>
         val name = c.path.last
@@ -1210,18 +1212,20 @@ object myrvtests extends Module {
       }
     }
 
-//    def report = T {
-//      val failed = run().filter(_.path.last.endsWith("failed.log"))
-//      assert(failed.isEmpty, s"tests failed in ${failed.map(_.path.last).mkString(", ")}")
-//    }
   }
 
   object smoketest extends Test {
     def bin = Seq(cases.smoketest.compile())
   }
-    object `rv64si-p` extends Test {
-      def bin = riscvtests.test.`rv64si-p`.binaries
-    }
+
+  object `rv64` extends Test {
+    def bin = riscvtests.test.`rv64`.binaries
+  }
+
+  object `rv64si-p` extends Test {
+    def bin = riscvtests.test.`rv64si-p`.binaries
+  }
+
 
     object `rv64mi-p` extends Test {
       def bin = riscvtests.test.`rv64mi-p`.binaries
