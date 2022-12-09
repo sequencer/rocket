@@ -146,6 +146,7 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
   pc = proc.get_state()->pc;
   inst_bits = fetch.insn.bits();
   target_mem = -1;
+  is_committed = false;// j insn should be committed immediately cause it doesn't have wb stage.
 
   // extension depending parameter
   is_compress = false;
@@ -158,6 +159,11 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
     rs2_bits = xr[fetch.insn.rs2()];
     rd_idx = fetch.insn.rd();
     opcode = clip(inst_bits, 0, 6);
+    // for j insn for x0;
+    if(opcode == 0b1101111 && rd_idx == 0){
+      is_committed = true;
+
+    }
     // for integer/double load/store
     is_load = (opcode == 0b11) || (opcode == 0b0000111);
     is_store = opcode == 0b100011|| (opcode == 0b0100111);
@@ -275,7 +281,6 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
   is_amo = opcode == 0b0101111;
 
   is_issued = false;
-  is_committed = false;
   is_trap = false;
 
   satp = proc.get_state()->satp->read();
