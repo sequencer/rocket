@@ -26,8 +26,9 @@ compile:
 test:
 	mill -i -j 0 tests.run.rv64default.run
 
-mytest:
-	mill tmpcase.test --cycles 1000
+rvtest:
+	mill -i -j 0 myrvtests.rv64
+
 show:
 	riscv64-elf-objdump -Dzr /home/yyq/Projects/rocket/out/cases/smoketest/compile.dest/smoketest.elf | less
 
