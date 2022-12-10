@@ -276,11 +276,9 @@ object riscvtests extends Module{
         }
 
         def binaries = T {
-          os.walk(init().path).filter(p => p.last.startsWith(name())).filterNot(p => p.last.endsWith("elf")).filterNot(p => p.last.endsWith("rv64mi-p-csr")).filterNot(p => p.last.endsWith("rv64mi-p-breakpoint")).filterNot(p => p.last.startsWith("rv64um")).map(PathRef(_))
+          os.walk(init().path).filter(p => p.last.startsWith(name())).filterNot(p => p.last.endsWith("elf")).map(PathRef(_))
         }
       }
-
-
 
       def commit = T.input {
         "047314c5b0525b86f7d5bb6ffe608f7a8b33ffdb"
@@ -387,10 +385,12 @@ object riscvtests extends Module{
 
       object `rv64uzfh-v` extends Suite
 
-      object `rv64` extends Suite
+      object `rv64` extends Suite {
+        override def binaries = T {
+          os.walk(init().path).filter(p => p.last.startsWith(name())).filterNot(p => p.last.endsWith("elf")).filterNot(p => p.last.endsWith("rv64mi-p-csr")).filterNot(p => p.last.endsWith("rv64mi-p-breakpoint")).filterNot(p => p.last.startsWith("rv64um")).map(PathRef(_))
+        }
+      }
     }
-
-
 }
 
 object tests extends Module {
@@ -1100,22 +1100,22 @@ object cosim extends Module {
     def CMakeListsString = T {
       // format: off
       s"""cmake_minimum_required(VERSION 3.20)
-         |project(emulator)
-         |
-         |include(FetchContent)
-         |FetchContent_Declare(args GIT_REPOSITORY https://github.com/Taywee/args GIT_TAG 6.4.0)
-         |FetchContent_Declare(glog GIT_REPOSITORY https://github.com/google/glog GIT_TAG v0.6.0)
-         |FetchContent_Declare(fmt GIT_REPOSITORY https://github.com/fmtlib/fmt GIT_TAG 9.1.0)
-         |FetchContent_MakeAvailable(args glog fmt)
-         |
-         |set(CMAKE_CXX_FLAGS "$${CMAKE_CXX_FLAGS} -DVERILATOR")
-         |
-         |find_package(verilator)
          |set(CMAKE_CXX_STANDARD 17)
          |set(CMAKE_CXX_COMPILER_ID "clang")
          |set(CMAKE_C_COMPILER "clang")
          |set(CMAKE_CXX_COMPILER "clang++")
          |
+         |project(emulator)
+         |
+         |include(FetchContent)
+         |FetchContent_Declare(args GIT_REPOSITORY https://github.com/Taywee/args GIT_TAG 6.4.0)
+         |FetchContent_Declare(glog GIT_REPOSITORY https://github.com/google/glog GIT_TAG v0.6.0 FIND_PACKAGE_ARGS)
+         |FetchContent_Declare(fmt GIT_REPOSITORY https://github.com/fmtlib/fmt GIT_TAG 9.1.0 FIND_PACKAGE_ARGS)
+         |FetchContent_MakeAvailable(args glog fmt)
+         |
+         |set(CMAKE_CXX_FLAGS "$${CMAKE_CXX_FLAGS} -DVERILATOR")
+         |
+         |find_package(verilator)
          |find_package(Threads)
          |set(THREADS_PREFER_PTHREAD_FLAG ON)
          |
