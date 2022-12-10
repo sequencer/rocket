@@ -196,7 +196,6 @@ void VBridgeImpl::run() {
         //debug
         LOG(INFO) << fmt::format("List all the queue after RTL commit");
         for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-          //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
           LOG(INFO) << fmt::format("spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
         }
 
@@ -251,31 +250,18 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
   LOG(INFO) << fmt::format("--------------------------------------------------------------------------------------------------------");
   LOG(INFO) << fmt::format("Spike start to fetch pc={:08X} ",pc_before);
   //----------------------------DEBUG before fetch------------------------------------------------------
-//  if(pc_before == 0x80000190) {
-//    LOG(INFO) << fmt::format("stop");
-//  }
   try{
     auto fetch = proc.get_mmu()->load_insn(state->pc);
     auto event = create_spike_event(fetch);  // event not empty iff fetch is v inst
     auto &xr = proc.get_state()->XPR;
     //-------------debug-------------------------------------------------------------
-//  auto search = state->csrmap.find(CSR_FCSR);
-//  if (search != state->csrmap.end()) {
-//    LOG(INFO) << fmt::format("FCSR ={:08X}",search->second->read());
-//  }
-//  LOG(INFO) << fmt::format("insn.csr = {:08X}",fetch.insn.csr());
-//  LOG(INFO) << fmt::format("Spike sstatus={:08X}",state->sstatus->read());
 
-//  LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",10,state->XPR[10]);
-//  LOG(INFO) << fmt::format("Spike before mstatus={:08X}",state->mstatus->read());
     LOG(INFO) << fmt::format("Spike start to execute pc=[{:08X}] insn = {:08X} DISASM:{}",pc_before,fetch.insn.bits(),proc.get_disassembler()->disassemble(fetch.insn));
     LOG(INFO) << fmt::format("X[{}] = 0x{:08X}",6,state->XPR[6]);
     LOG(INFO) << fmt::format("X[{}] = 0x{:08X}",11,state->XPR[11]);
     LOG(INFO) << fmt::format("a0 = 0x{:08X}",state->XPR[10]);
 //----------------------------DEBUG after fetch ,before execute------------------------------------------------------
-//    if(pc_before == 0x80000190) {
-//      LOG(INFO) << fmt::format("stop");
-//    }
+
     LOG(INFO) << fmt::format("Before spike fetch");
     LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",1,state->XPR[1]);
     LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",2,state->XPR[2]);
@@ -296,23 +282,7 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
 
     LOG(INFO) << fmt::format("Spike after execute pc={:08X} ",state->pc);
     LOG(INFO) << fmt::format("Spike mcause={:08X}",state->mcause->read());
-
-
     LOG(INFO) << fmt::format("event block.addr= ",event.value().block.addr);
-
-
-    //LOG(INFO) << fmt::format("Spike CSR start to execute pc={:08X} insn = {:08X}",state->pc,fetch.insn.bits());
-//    if(state->pc == 0x800000DC){
-//      LOG(INFO) << fmt::format("Stop here");
-//    }
-
-
-
-    //LOG(INFO) << fmt::format("pc = {:08x}",pc);
-
-    //LOG(INFO) << fmt::format("Spike CSR insn ends with pc={:08X} ",state->pc);
-
-
     LOG(INFO) << fmt::format("Spike after mstatus={:08X}",state->mstatus->read());
     LOG(INFO) << fmt::format("Spike after pc={:08X}",state->pc);
     LOG(INFO) << fmt::format("Reg[{}] = 0x{:08X}",10,state->XPR[10]);
@@ -459,16 +429,6 @@ void VBridgeImpl::receive_tl_req() {
     LOG(FATAL) << fmt::format("cannot find spike_event for tl_request; addr = {:08X}, pc = {:08X} , opcode = {}",addr,pc,opcode);
 
   }
-//  for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-//
-//    auto mem_read = se_iter->mem_access_record.all_reads.find(addr);
-//    if(mem_read != se_iter->mem_access_record.all_reads.end()){
-//      se = &(*se_iter);
-//      LOG(INFO) << fmt::format("success se.pc = {:08X}",se_iter->pc);
-//      break;
-//    }
-//
-//  }
 
 
   switch (opcode) {
@@ -536,27 +496,6 @@ void VBridgeImpl::receive_tl_req() {
   }
 }
 
-//void VBridgeImpl::return_fetch_response(){
-//#define TL(name) (get_tl_##name(top))
-//  bool d_valid = false;
-//  for (int i=0;i<8;i++){
-//    if(fetch_banks[i].remaining){
-//      fetch_banks[i].remaining = false;
-//      // LOG(INFO) << fmt::format("Fetch insn: {:08X}", fetch_banks[i].data);
-//      TL(d_bits_opcode) = 1;
-//      TL(d_bits_data) = fetch_banks[i].data;
-//      TL(d_bits_source) = fetch_banks[i].source;
-//      TL(d_bits_size) = 6;
-//      d_valid = true;
-//      break;
-//    }
-//  }
-//  TL(d_valid) = d_valid;
-//#undef TL
-//}
-
-// for grantData, need to delay 1 cycle , or the d_ready will go low
-// output if there is remaining in fetch/acquire banks
 
 void VBridgeImpl::return_fetch_response() {
 #define TL(name) (get_tl_##name(top))
@@ -603,38 +542,6 @@ void VBridgeImpl::return_fetch_response() {
 #undef TL
 }
 
-//void VBridgeImpl::return_tl_response() {
-//#define TL(i, name) (get_tl_##name(top, (i)))
-//  for (int i = 0; i < consts::numTL; i++) {
-//    // update remaining_cycles
-//    for (auto &[addr, record]: tl_banks[i]) {
-//      if (record.remaining_cycles > 0) record.remaining_cycles--;
-//    }
-//
-//    // find a finished request and return
-//    bool d_valid = false;
-//    for (auto &[addr, record]: tl_banks[i]) {
-//      if (record.remaining_cycles == 0) {
-//        TL(i, d_bits_opcode) = record.op == TLReqRecord::opType::Get ? TlOpcode::AccessAckData : TlOpcode::AccessAck;
-//        TL(i, d_bits_data) = record.data;
-//        TL(i, d_bits_sink) = record.source;
-//        d_valid = true;
-//        record.op = TLReqRecord::opType::Nil;
-//        break;
-//      }
-//    }
-//    TL(i, d_valid) = d_valid;
-//
-//    // collect garbage
-//    erase_if(tl_banks[i], [](const auto &record) {
-//        return record.second.op == TLReqRecord::opType::Nil;
-//    });
-//
-//    // welcome new requests all the time
-//    TL(i, a_ready) = true;
-//  }
-//#undef TL
-//}
 
 
 
