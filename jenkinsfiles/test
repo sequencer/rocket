@@ -15,7 +15,7 @@ pipeline {
     }
     stage('tests') {
       steps {
-        sh 'mill -j 0 tests.run.rv64default.report'
+        sh 'env -i nix develop -c make rvtest'
       }
     }
   }
