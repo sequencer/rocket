@@ -4,17 +4,12 @@ pipeline {
     skipDefaultCheckout(true)
   }
   stages {
-    stage('Prepare') {
+    stage('Tests') {
       steps {
         cleanWs()
         checkout scm
         sh 'make init'
-        sh 'make depatch'
         sh 'make patch'
-      }
-    }
-    stage('tests') {
-      steps {
         sh 'env -i nix develop -c make rvtest'
       }
     }
