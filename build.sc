@@ -97,7 +97,6 @@ object myrocketchip extends dependencies.`rocket-chip`.common.CommonRocketChip {
     Seq("-Xsource:2.11", s"-Xplugin:${mychisel3.plugin.jar().path}")
   }
 }
-
 object mytilelink extends dependencies.tilelink.common.TileLinkModule {
   override def millSourcePath = os.pwd / "dependencies" / "tilelink" / "tilelink"
 
@@ -109,94 +108,6 @@ object mytilelink extends dependencies.tilelink.common.TileLinkModule {
 
   def chisel3PluginJar = T {
     Some(mychisel3.plugin.jar())
-  }
-}
-
-object compilerrt extends Module {
-  override def millSourcePath = os.pwd / "dependencies" / "llvm-project" / "compiler-rt"
-  // ask make to cache file.
-  def compile = T.persistent {
-    os.proc("cmake", "-S", millSourcePath,
-      "-DCOMPILER_RT_BUILD_LIBFUZZER=OFF",
-      "-DCOMPILER_RT_BUILD_SANITIZERS=OFF",
-      "-DCOMPILER_RT_BUILD_PROFILE=OFF",
-      "-DCOMPILER_RT_BUILD_MEMPROF=OFF",
-      "-DCOMPILER_RT_BUILD_ORC=OFF",
-      "-DCOMPILER_RT_BUILD_BUILTINS=ON",
-      "-DCOMPILER_RT_BAREMETAL_BUILD=ON",
-      "-DCOMPILER_RT_INCLUDE_TESTS=OFF",
-      "-DCOMPILER_RT_HAS_FPIC_FLAG=OFF",
-      "-DCOMPILER_RT_DEFAULT_TARGET_ONLY=On",
-      "-DCOMPILER_RT_OS_DIR=riscv64",
-      "-DCMAKE_BUILD_TYPE=Release",
-      "-DCMAKE_SYSTEM_NAME=Generic",
-      "-DCMAKE_SYSTEM_PROCESSOR=riscv64",
-      "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
-      "-DCMAKE_SIZEOF_VOID_P=8",
-      "-DCMAKE_ASM_COMPILER_TARGET=riscv64-none-elf",
-      "-DCMAKE_C_COMPILER_TARGET=riscv64-none-elf",
-      "-DCMAKE_C_COMPILER_WORKS=ON",
-      "-DCMAKE_CXX_COMPILER_WORKS=ON",
-      "-DCMAKE_C_COMPILER=clang",
-      "-DCMAKE_CXX_COMPILER=clang++",
-      "-DCMAKE_C_FLAGS=-nodefaultlibs -fno-exceptions -mno-relax -Wno-macro-redefined -fPIC",
-      "-DCMAKE_INSTALL_PREFIX=/usr",
-      "-Wno-dev",
-    ).call(T.ctx.dest)
-    os.proc("make", "-j", Runtime.getRuntime().availableProcessors()).call(T.ctx.dest)
-    PathRef(T.ctx.dest)
-  }
-}
-/** change riscv32 to riscv64*/
-object musl extends Module {
-  override def millSourcePath = os.pwd / "dependencies" / "musl"
-  // ask make to cache file.
-  def libraryResources = T.persistent {
-    os.proc("make", s"DESTDIR=${T.ctx.dest}", "install").call(compilerrt.compile().path)
-    PathRef(T.ctx.dest)
-  }
-  def compile = T.persistent {
-    val p = libraryResources().path
-    os.proc(millSourcePath / "configure", "--target=riscv64-none-elf", "--prefix=/usr").call(
-      T.ctx.dest,
-      Map (
-        "CC" -> "clang",
-        "CXX" -> "clang++",
-        "AR" -> "llvm-ar",
-        "RANLIB" -> "llvm-ranlib",
-        "LD" -> "lld",
-        "LIBCC" -> "-lclang_rt.builtins-riscv64",
-        "CFLAGS" -> "--target=riscv64 -mno-relax -nostdinc",
-        "LDFLAGS" -> s"-fuse-ld=lld --target=riscv64 -nostdlib -L${p}/usr/lib/riscv64",
-      )
-    )
-    os.proc("make", "-j", Runtime.getRuntime().availableProcessors()).call(T.ctx.dest)
-    PathRef(T.ctx.dest)
-  }
-}
-
-object spike extends Module {
-  override def millSourcePath = os.pwd / "dependencies" / "riscv-isa-sim"
-
-  // ask make to cache file.
-  def compile = T.persistent {
-    mill.modules.Jvm.runSubprocess(
-      Seq(millSourcePath / "configure",
-        "--prefix", "/usr",
-        "--without-boost",
-        "--without-boost-asio",
-        "--without-boost-regex",
-        "--enable-commitlog"
-      ).map(_.toString),
-      Map(
-        "CC" -> "clang",
-        "CXX" -> "clang++",
-        "AR" -> "llvm-ar",
-        "RANLIB" -> "llvm-ranlib",
-        "LD" -> "lld"
-      ), T.ctx.dest)
-    mill.modules.Jvm.runSubprocess(Seq("make", "-j", Runtime.getRuntime().availableProcessors()).map(_.toString), Map[String, String](), T.ctx.dest)
-    T.ctx.dest
   }
 }
 
@@ -957,7 +868,7 @@ object cases extends Module {
       PathRef(T.ctx.dest / "linker.ld")
     }
     def compile: T[PathRef] = T {
-      os.proc(Seq("clang", "-o", name() + ".elf" ,"--target=riscv64", "-march=rv64gc", s"-L${musl.compile().path}/lib", s"-L${compilerrt.compile().path}/lib/riscv64", "-mno-relax", s"-T${linkScript().path}") ++ allSourceFiles().map(_.path.toString)).call(T.ctx.dest)
+      os.proc(Seq("clang-rv64", "-o", name() + ".elf" ,"--target=riscv64", "-march=rv64gc", "-mno-relax", s"-T${linkScript().path}") ++ allSourceFiles().map(_.path.toString)).call(T.ctx.dest)
       os.proc(Seq("llvm-objcopy", "-O", "binary", "--only-section=.text", name() + ".elf", name())).call(T.ctx.dest)
       T.log.info(s"${name()} is generated in ${T.dest},\n")
       PathRef(T.ctx.dest / name())
@@ -1107,32 +1018,24 @@ object cosim extends Module {
          |
          |project(emulator)
          |
-         |include(FetchContent)
-         |FetchContent_Declare(args GIT_REPOSITORY https://github.com/Taywee/args GIT_TAG 6.4.0)
-         |FetchContent_Declare(glog GIT_REPOSITORY https://github.com/google/glog GIT_TAG v0.6.0 FIND_PACKAGE_ARGS)
-         |FetchContent_Declare(fmt GIT_REPOSITORY https://github.com/fmtlib/fmt GIT_TAG 9.1.0 FIND_PACKAGE_ARGS)
-         |FetchContent_MakeAvailable(args glog fmt)
+         |find_package(args REQUIRED)
+         |find_package(glog REQUIRED)
+         |find_package(fmt REQUIRED)
+         |find_package(libspike REQUIRED)
+         |find_package(verilator REQUIRED)
+         |find_package(Threads REQUIRED)
+         |set(THREADS_PREFER_PTHREAD_FLAG ON)
          |
          |set(CMAKE_CXX_FLAGS "$${CMAKE_CXX_FLAGS} -DVERILATOR")
-         |
-         |find_package(verilator)
-         |find_package(Threads)
-         |set(THREADS_PREFER_PTHREAD_FLAG ON)
          |
          |add_executable(${topName}
          |${allCSourceFiles().map(_.path).mkString("\n")}
          |)
          |
          |target_include_directories(${topName} PUBLIC ${csources().path.toString})
-         |target_include_directories(${topName} PRIVATE ${(spike.millSourcePath / "riscv").toString})
-         |target_include_directories(${topName} PRIVATE ${(spike.millSourcePath / "fesvr").toString})
-         |target_include_directories(${topName} PRIVATE ${(spike.millSourcePath / "softfloat").toString})
-         |target_include_directories(${topName} PRIVATE ${spike.compile().toString})
          |
-         |target_link_directories(${topName} PRIVATE ${spike.compile().toString})
-         |target_link_libraries(${topName} PRIVATE $${CMAKE_THREAD_LIBS_INIT})
          |target_link_libraries(${topName} PUBLIC $${CMAKE_THREAD_LIBS_INIT})
-         |target_link_libraries(${topName} PUBLIC riscv fmt glog args)
+         |target_link_libraries(${topName} PUBLIC libspike fmt glog)  # note that libargs is header only, nothing to link
          |
          |verilate(${topName}
          |  SOURCES
