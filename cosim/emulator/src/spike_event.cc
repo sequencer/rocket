@@ -89,7 +89,6 @@ void SpikeEvent::log_arch_changes() {
 
   // record root page table
   if (satp_mode == 0x8 && block.addr==-1){
-    LOG(INFO) << fmt::format("find satp_mode == 8" );
     uint64_t root_addr = satp_ppn << 12;
     for(int i=0; i<8 ; i++){
       uint64_t data = 0;
@@ -119,7 +118,6 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
   is_compress = false;
   if(fetch.insn.length() == 2){
     is_compress = true;
-    LOG(INFO) << fmt::format("find compress insn!");
   }
   if(!is_compress){
     rs1_bits = xr[fetch.insn.rs1()];
@@ -138,7 +136,6 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
 
     if(is_load){
       target_mem = rs1_bits + fetch.insn.i_imm();
-      // LOG(INFO) << fmt::format("find load mem addr = {:08X}",target_mem );
     }
     if(is_store) target_mem = rs1_bits + fetch.insn.s_imm();
     if(is_amo) target_mem = rs1_bits;
@@ -153,7 +150,7 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
         if(func3>=5) {
           is_store = true;
           switch(func3){
-            case 5://C.FSD
+            case 5:// C.FSD
               target_mem = rs1s_bits + fetch.insn.rvc_ld_imm();
               break;
             case 6:// C.SW
@@ -169,7 +166,7 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
         else if(func3>=1 && func3<=3){// include all 0-> the illegal insn
           is_load = true;
           switch(func3){
-            case 1://C.FLD
+            case 1:// C.FLD
               target_mem = rs1s_bits + fetch.insn.rvc_ld_imm();
               break;
             case 2:// C.LW
@@ -197,7 +194,7 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
           is_store = true;
           rd_idx = 0;// todo: set rd_idx to 0
           switch (func3) {
-            case 5://C.FSDSP
+            case 5:// C.FSDSP
               target_mem = sp_bits + fetch.insn.rvc_sdsp_imm();
               break;
             case 6:// C.SWSP
@@ -214,13 +211,13 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
           is_load = true;
           rd_idx = fetch.insn.rd();
           switch (func3) {
-            case 1://C.FLDSP
+            case 1:// C.FLDSP
               target_mem = sp_bits + fetch.insn.rvc_ldsp_imm();
               break;
-            case 2://C.LWSP
+            case 2:// C.LWSP
               target_mem = sp_bits + fetch.insn.rvc_lwsp_imm();
               break;
-            case 3://C.LDSP
+            case 3:// C.LDSP
               target_mem = sp_bits + fetch.insn.rvc_ldsp_imm();
               break;
             default:
@@ -241,13 +238,8 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
         LOG(FATAL) << fmt::format("unknown compress opcode");
     }
   }
-
-
   rd_old_bits = proc.get_state()->XPR[rd_idx];
-
   is_csr = opcode == 0b1110011;
-
-
   is_issued = false;
   is_trap = false;
 
@@ -256,7 +248,6 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
   satp_mode = clip(satp,60,63);
 
   block.addr = -1;
-
   disasm = proc.get_disassembler()->disassemble(fetch.insn);
 
 }
