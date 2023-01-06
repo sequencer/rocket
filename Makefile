@@ -26,8 +26,11 @@ compile:
 test:
 	mill -i -j 0 tests.run.rv64default.run
 
-rvtest:
-	mill -i -j 0 myrvtests.rv64
+riscvtests:
+	mill -i -j 0 tests.riscvtests.rv64
+
+smoketest:
+	mill -i -j 0 tests.smoketest.smoketest
 
 clean:
 	git clean -fd

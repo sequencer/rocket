@@ -10,7 +10,7 @@ pipeline {
         checkout scm
         sh 'make init'
         sh 'make patch'
-        sh 'env -i nix develop -c make rvtest'
+        sh 'env -i nix develop -c make riscvtests'
       }
     }
   }

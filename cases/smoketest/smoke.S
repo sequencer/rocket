@@ -1,8 +1,5 @@
 .global _start
 _start:
-    li t3,0x800
-    csrs misa,t3
-    csrr t0, misa
     add t0,t0,x0
     addi t0, x0, 0x1
     addi t1, x0, 0x0
