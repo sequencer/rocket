@@ -29,13 +29,6 @@ test:
 rvtest:
 	mill -i -j 0 myrvtests.rv64
 
-show:
-	riscv64-elf-objdump -Dzr /home/yyq/Projects/rocket/out/cases/smoketest/compile.dest/smoketest.elf | less
-
-smoke:
-	riscv64-elf-objdump -Dzr out/cases/smoketest/compile.dest/smoketest.elf | less
-
-
 clean:
 	git clean -fd
 
