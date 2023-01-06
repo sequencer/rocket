@@ -109,8 +109,7 @@ uint8_t VBridgeImpl::load(uint64_t address){
   return *sim.addr_to_mem(address);
 }
 
-/*
- * For TL Acquire
+/* For TL Acquire
  * Record mem info in se.block when init spike event;
  * receive tl Acquire, find corresponding SE in queue. store se.block info in AcquireBanks;set AcquireBanks.remaining as true;
  * return: drive D channel with AcquireBanks
@@ -412,7 +411,6 @@ void VBridgeImpl::receive_tl_req() {
         for (int j = 0; j < 8; ++j) {
           data += (uint64_t) load(addr + j + i*8) << (j * 8);
         }
-        //LOG(INFO) << fmt::format("Find insn: {:08X} , at:{:08X}",insn,addr + i*8);
         aquire_banks[i].data = se->block.blocks[i];
         aquire_banks[i].param = param;
         aquire_banks[i].source = src;
@@ -438,7 +436,6 @@ void VBridgeImpl::return_fetch_response() {
   for (auto & fetch_bank : fetch_banks){
     if(fetch_bank.remaining){
       fetch_bank.remaining = false;
-      // LOG(INFO) << fmt::format("Fetch insn: {:08X}", fetch_banks[i].data);
       TL(d_bits_opcode) = 1;
       TL(d_bits_data) = fetch_bank.data;
       source = fetch_bank.source;

@@ -34,5 +34,3 @@ smoketest:
 
 clean:
 	git clean -fd
-
-

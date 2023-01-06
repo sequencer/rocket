@@ -17,6 +17,3 @@ loop:
     addi x23, x0, 0x1
     addi x24, x0, 0x1
     addi x25, x0, 0x1
-
-
-

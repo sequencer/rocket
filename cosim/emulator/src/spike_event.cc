@@ -29,7 +29,6 @@ void SpikeEvent::pre_log_arch_changes() {
     }
     LOG(INFO) << fmt::format("spike pre_log mem access on:{:08X} ; block_addr={:08X}", address,addr_align);
   }
-
 }
 
 void SpikeEvent::log_arch_changes() {
@@ -45,7 +44,6 @@ void SpikeEvent::log_arch_changes() {
     // xx0100 <- csr
 
     if ((write_idx & 0xf) == 0b0000) {  // scalar rf
-      //LOG(INFO) << fmt::format("idx = {:08X} data = {:08X}", rd_idx, rd_bits);
       uint64_t rd_should_be_bits = proc.get_state()->XPR[rd_idx];
       if (rd_new_bits != rd_should_be_bits ) {
         rd_new_bits = rd_should_be_bits;
@@ -60,7 +58,6 @@ void SpikeEvent::log_arch_changes() {
     if(address != target_mem){
       LOG(FATAL) << fmt::format("Error! spike detect mem_write at= {:08X}; target mem = {:08X}", address,target_mem);
     }
-    //uint64_t addr_align = address & 0xFFFFFFC0;
     uint64_t value = std::get<1>(mem_write);
     // Byte size_bytes
     uint8_t size_by_byte = std::get<2>(mem_write);
@@ -73,8 +70,6 @@ void SpikeEvent::log_arch_changes() {
     if(address != target_mem){
       LOG(FATAL) << fmt::format("Error! spike detect mem_read at= {:08X}; target mem = {:08X}", address,target_mem);
     }
-    // mem block start addr
-    //uint64_t addr_align = address & 0xFFFFFFC0;
     // Byte size_bytes
     uint8_t size_by_byte = std::get<2>(mem_read);
     uint64_t value = 0;
@@ -82,7 +77,6 @@ void SpikeEvent::log_arch_changes() {
     for (int i = 0; i < size_by_byte; ++i) {
       value += (uint64_t) impl->load(address + i) << (i * 8);
     }
-
     LOG(INFO) << fmt::format("spike detect mem read {:08X} on mem:{:08X} with size={}byte", value, address, size_by_byte);
     mem_access_record.all_reads[address] = { .size_by_byte = size_by_byte, .val = value };
   }
@@ -249,7 +243,6 @@ SpikeEvent::SpikeEvent(processor_t &proc, insn_fetch_t &fetch, VBridgeImpl *impl
 
   block.addr = -1;
   disasm = proc.get_disassembler()->disassemble(fetch.insn);
-
 }
 
 

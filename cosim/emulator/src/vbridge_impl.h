@@ -64,23 +64,21 @@ private:
   VerilatedFstC tfp;
   // mem
   simple_sim sim;
-  // spike init
+  // to init spike
   isa_parser_t isa;
   processor_t proc;
-  // spike event
-
   // parameter used in verilator
   uint64_t _cycles;
-  /// file path of executeable binary file, which will be executed.
+  // file path of executeable binary file, which will be executed.
   std::string bin;
-  // entrance bin
+  // file path of entrance binary file
   std::string ebin;
-  /// generated waveform path.
+  // generated waveform path.
   std::string wave;
-  /// reset vector of
+  // reset vector
   uint64_t reset_vector{};
-  /// RTL timeout cycles
-  /// note: this is not the real system cycles, scalar instructions is evaulated via spike, which is not recorded.
+  // RTL timeout cycles
+  // note: this is not the real system cycles, scalar instructions is evaulated via spike, which is not recorded.
   uint64_t timeout{};
 
   // spike
@@ -103,6 +101,7 @@ private:
   void terminate_simulator();
   uint64_t get_t();
 
+  // methods for TL channel
   void return_tl_response();
   void receive_tl_req();
   void return_fetch_response();
@@ -113,6 +112,4 @@ private:
   int get_mem_req_cycles() {
     return 1;
   };
-
-
 };

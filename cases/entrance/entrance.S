@@ -7,6 +7,3 @@ _start:
     slli t0,t0,32
     srli t0,t0,32
     jr t0
-
-
-

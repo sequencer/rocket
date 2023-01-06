@@ -1,10 +1,7 @@
 #pragma once
-
 #include <fstream>
-
 #include <fmt/core.h>
 #include <glog/logging.h>
-
 #include "simif.h"
 
 class simple_sim : public simif_t {
@@ -53,15 +50,12 @@ public:
     // should return NULL for MMIO addresses
     // todo: for more oversize mem access return mem[0]
     char *addr_to_mem(reg_t addr) override {
-//      if (addr > size) return &mem[0];
-//      else return &mem[addr];
       if (!paddr_ok(addr))
         return NULL;
       return &mem[addr];
     }
     // Do not use mmio;return false for Instruction access fault
     bool mmio_load(reg_t addr, size_t len, uint8_t *bytes) override {
-      // assert(false && "not implemented");
       return false;
     }
 
