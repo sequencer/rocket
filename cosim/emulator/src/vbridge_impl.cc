@@ -6,10 +6,10 @@
 #include "verilated.h"
 
 #include "exceptions.h"
-#include "vbridge_impl.h"
-#include "util.h"
-#include "tl_interface.h"
 #include "simple_sim.h"
+#include "tl_interface.h"
+#include "util.h"
+#include "vbridge_impl.h"
 #include "vpi.h"
 
 #include "glog_exception_safe.h"
@@ -19,29 +19,27 @@ inline uint32_t decode_size(uint32_t encoded_size) {
   return 1 << encoded_size;
 }
 
-VBridgeImpl::VBridgeImpl() :
-    sim(1 << 30),
-    isa("rv64gc", "msu"),
-    _cycles(100),
-    proc(
-        /*isa*/ &isa,
-        /*varch*/ fmt::format("").c_str(),
-        /*sim*/ &sim,
-        /*id*/ 0,
-        /*halt on reset*/ true,
-        /* endianness*/ memif_endianness_little,
-        /*log_file_t*/ nullptr,
-        /*sout*/ std::cerr){
+VBridgeImpl::VBridgeImpl() : sim(1 << 30),
+                             isa("rv64gc", "msu"),
+                             _cycles(100),
+                             proc(
+                                 /*isa*/ &isa,
+                                 /*varch*/ fmt::format("").c_str(),
+                                 /*sim*/ &sim,
+                                 /*id*/ 0,
+                                 /*halt on reset*/ true,
+                                 /* endianness*/ memif_endianness_little,
+                                 /*log_file_t*/ nullptr,
+                                 /*sout*/ std::cerr) {
 }
 
-void VBridgeImpl::setup(const std::string &_bin, const std::string &_ebin,const std::string &_wave, uint64_t _reset_vector, uint64_t cycles) {
+void VBridgeImpl::setup(const std::string &_bin, const std::string &_ebin, const std::string &_wave, uint64_t _reset_vector, uint64_t cycles) {
   this->bin = _bin;
   this->ebin = _ebin;
   this->wave = _wave;
   this->reset_vector = _reset_vector;
   this->timeout = cycles;
 }
-
 
 
 void VBridgeImpl::reset() {
@@ -81,13 +79,14 @@ void VBridgeImpl::configure_simulator(int argc, char **argv) {
 
 void VBridgeImpl::init_spike() {
   auto state = proc.get_state();
-  LOG(INFO) << fmt::format("Spike reset misa={:08X}",state->misa->read());
-  LOG(INFO) << fmt::format("Spike reset mstatus={:08X}",state->mstatus->read());
+  LOG(INFO) << fmt::format("Spike reset misa={:08X}", state->misa->read());
+  LOG(INFO) << fmt::format("Spike reset mstatus={:08X}", state->mstatus->read());
   // load binary to reset_vector
-  sim.load(bin,ebin, reset_vector);
+  sim.load(bin, ebin, reset_vector);
 }
 
-SpikeEvent *find_se_to_issue();void VBridgeImpl::init_simulator() {
+SpikeEvent *find_se_to_issue();
+void VBridgeImpl::init_simulator() {
   Verilated::traceEverOn(true);
   top.trace(&tfp, 99);
   tfp.open(wave.c_str());
@@ -105,7 +104,7 @@ uint64_t VBridgeImpl::get_t() {
   return ctx.time();
 }
 
-uint8_t VBridgeImpl::load(uint64_t address){
+uint8_t VBridgeImpl::load(uint64_t address) {
   return *sim.addr_to_mem(address);
 }
 
@@ -117,7 +116,7 @@ uint8_t VBridgeImpl::load(uint64_t address){
 void VBridgeImpl::run() {
 
   init_spike();
-  //sim.load(bin, reset_vector);
+  // sim.load(bin, reset_vector);
   init_simulator();
   reset();
 
@@ -125,7 +124,7 @@ void VBridgeImpl::run() {
   // queue size must > for trap insn to pop correct
   while (true) {
     loop_until_se_queue_full();
-    while(to_rtl_queue.size()>1){
+    while (to_rtl_queue.size() > 1) {
       return_fetch_response();
 
       top.clock = 1;
@@ -149,49 +148,50 @@ void VBridgeImpl::run() {
       tfp.dump(2 * ctx.time() - 1);
 
 
-      // when RTL detect write back
-      if(top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_valid){
+      // when RTL write back
+      if (top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_valid) {
         uint64_t pc = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_reg_pc;
-        LOG(INFO) << fmt::format("RTL write back insn {:08X} ",pc);
+        LOG(INFO) << fmt::format("RTL write back insn {:08X} ", pc);
         // Check rf write
         // todo: use rf_valid
-        if(top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT____Vcellinp__rf_ext__W0_en){
+        if (top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT____Vcellinp__rf_ext__W0_en) {
           record_rf_access();
         }
         // commit spike event
         bool commit = false;
 
         for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-          if(se_iter->pc == pc){
-            // mechanism for commit trap insn
-            // trap insn will commit with trap vector first insn; demanding the trap insn not to be the last one in the queue
-            if(se_iter->pc == 0x80000004){
+          if (se_iter->pc == pc) {
+            // mechanism to the insn which causes trap.
+            // trapped insn will commit with the first insn after trap(0x80000004).
+            // It demands the trap insn not to be the last one in the queue.
+            if (se_iter->pc == 0x80000004) {
               for (auto se_it = to_rtl_queue.rbegin(); se_it != to_rtl_queue.rend(); se_it++) {
-                if(se_it->is_trap) se_it->is_committed = true;
+                if (se_it->is_trap) se_it->is_committed = true;
               }
             }
             commit = true;
             se_iter->is_committed = true;
-            LOG(INFO) << fmt::format("Set spike {:08X} as committed",se_iter->pc);
+            LOG(INFO) << fmt::format("Set spike {:08X} as committed", se_iter->pc);
             break;
           }
         }
-        if(!commit) LOG(INFO) << fmt::format("RTL wb without se in pc =  {:08X}",pc);
-        // pop
-        for(int i = 0;i<5;i++){
-          if(to_rtl_queue.back().is_committed){
-            LOG(INFO) << fmt::format("Pop SE pc = {:08X} ",to_rtl_queue.back().pc);
+        // Error: cannot find the Event
+        if (!commit) LOG(INFO) << fmt::format("RTL wb without se in pc =  {:08X}", pc);
+        // pop the committed Event from the queue
+        for (int i = 0; i < 5; i++) {
+          if (to_rtl_queue.back().is_committed) {
+            LOG(INFO) << fmt::format("Pop SE pc = {:08X} ", to_rtl_queue.back().pc);
             to_rtl_queue.pop_back();
           }
         }
       }
-      // todo: use rf_wen to replace wb_wen
       if (get_t() >= timeout) {
         throw TimeoutException();
       }
     }
-    }
   }
+}
 
 void VBridgeImpl::loop_until_se_queue_full() {
   LOG(INFO) << fmt::format("Refilling Spike queue");
@@ -208,23 +208,23 @@ void VBridgeImpl::loop_until_se_queue_full() {
   }
   LOG(INFO) << fmt::format("to_rtl_queue is full now, start to simulate.");
   for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-    LOG(INFO) << fmt::format("List: spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
+    LOG(INFO) << fmt::format("List: spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}", se_iter->pc, se_iter->rd_idx, se_iter->rd_old_bits, se_iter->rd_new_bits, se_iter->is_committed);
   }
 }
 // don't creat spike event for csr insn
-// use try-catch block to track trap in [fetch = proc.get_mmu()->load_insn(state->pc)]
-// todo: for trap insn, we don't create spike event; it might cause issues later;
+// use try-catch block to track trap in fetch stage [fetch = proc.get_mmu()->load_insn(state->pc)]
+// todo: haven't created spike event for insn which traps in fetch stage;
 std::optional<SpikeEvent> VBridgeImpl::spike_step() {
   auto state = proc.get_state();
-  // to use pro.state, set some csr 
+  // to use pro.state, set some csr
   state->dcsr->halt = false;
   // record pc before execute
   auto pc_before = state->pc;
-  try{
+  try {
     auto fetch = proc.get_mmu()->load_insn(state->pc);
-    auto event = create_spike_event(fetch);  // event not empty iff fetch is v inst
+    auto event = create_spike_event(fetch);
     auto &xr = proc.get_state()->XPR;
-    LOG(INFO) << fmt::format("Spike start to execute pc=[{:08X}] insn = {:08X} DISASM:{}",pc_before,fetch.insn.bits(),proc.get_disassembler()->disassemble(fetch.insn));
+    LOG(INFO) << fmt::format("Spike start to execute pc=[{:08X}] insn = {:08X} DISASM:{}", pc_before, fetch.insn.bits(), proc.get_disassembler()->disassemble(fetch.insn));
     auto &se = event.value();
     se.pre_log_arch_changes();
     proc.step(1);
@@ -232,69 +232,68 @@ std::optional<SpikeEvent> VBridgeImpl::spike_step() {
     // todo: detect exactly the trap
     // if a insn_after_pc = 0x80000004,set it as committed
     // set whose insn which traps committed in case queue stalls
-    if (state->pc == 0x80000004){
+    if (state->pc == 0x80000004) {
       se.is_trap = true;
-      LOG(INFO) << fmt::format("Trap! happens at pc = {:08X} ",pc_before);
+      LOG(INFO) << fmt::format("Trap! happens at pc = {:08X} ", pc_before);
     }
-    LOG(INFO) << fmt::format("Spike after execute pc={:08X} ",state->pc);
+    LOG(INFO) << fmt::format("Spike after execute pc={:08X} ", state->pc);
     return event;
-  }catch(trap_t &trap) {
+  } catch (trap_t &trap) {
     LOG(INFO) << fmt::format("spike fetch trapped with {}", trap.name());
     proc.step(1);
-    LOG(INFO) << fmt::format("Spike mcause={:08X}",state->mcause->read());
+    LOG(INFO) << fmt::format("Spike mcause={:08X}", state->mcause->read());
     return {};
-  }catch (triggers::matched_t& t)
-  {
+  } catch (triggers::matched_t &t) {
     LOG(INFO) << fmt::format("spike fetch triggers ");
     proc.step(1);
-    LOG(INFO) << fmt::format("Spike mcause={:08X}",state->mcause->read());
+    LOG(INFO) << fmt::format("Spike mcause={:08X}", state->mcause->read());
     return {};
   }
 }
 // now we take all the instruction as spike event except csr insn
 std::optional<SpikeEvent> VBridgeImpl::create_spike_event(insn_fetch_t fetch) {
-    return SpikeEvent{proc, fetch, this};
+  return SpikeEvent{proc, fetch, this};
 }
 
 void VBridgeImpl::record_rf_access() {
 
   // peek rtl rf access
-  uint32_t waddr =  top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__rf_waddr;
-  uint64_t wdata =  top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__rf_wdata;
+  uint32_t waddr = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__rf_waddr;
+  uint64_t wdata = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__rf_wdata;
   uint64_t pc = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_reg_pc;
   uint64_t insn = top.rootp->DUT__DOT__ldut__DOT__tile__DOT__core__DOT__wb_reg_inst;
 
-  uint8_t opcode = clip(insn,0,6);
+  uint8_t opcode = clip(insn, 0, 6);
   bool rtl_csr = opcode == 0b1110011;
 
   // exclude those rtl reg_write from csr insn
-  if(!rtl_csr){
-    LOG(INFO) << fmt::format("RTL wirte reg({}) = {:08X}, pc = {:08X}",waddr,wdata,pc);
+  if (!rtl_csr) {
+    LOG(INFO) << fmt::format("RTL wirte reg({}) = {:08X}, pc = {:08X}", waddr, wdata, pc);
     // find corresponding spike event
     SpikeEvent *se = nullptr;
     for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-      if ((se_iter->pc == pc) && (se_iter->rd_idx == waddr)&& (!se_iter->is_committed)) {
+      if ((se_iter->pc == pc) && (se_iter->rd_idx == waddr) && (!se_iter->is_committed)) {
         se = &(*se_iter);
         break;
       }
     }
-    if(se == nullptr){
+    if (se == nullptr) {
       for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-        //LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
-        LOG(INFO) << fmt::format("List: spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
+        // LOG(INFO) << fmt::format("se pc = {:08X}, rd_idx = {:08X}",se_iter->pc,se_iter->rd_idx);
+        LOG(INFO) << fmt::format("List: spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}", se_iter->pc, se_iter->rd_idx, se_iter->rd_old_bits, se_iter->rd_new_bits, se_iter->is_committed);
       }
-      LOG(FATAL) << fmt::format("RTL rf_write Cannot find se ; pc = {:08X} , insn={:08X}, waddr={:08X}",pc,insn,waddr);
+      LOG(FATAL) << fmt::format("RTL rf_write Cannot find se ; pc = {:08X} , insn={:08X}, waddr={:08X}", pc, insn, waddr);
     }
     // start to check RTL rf_write with spike event
     // for non-store ins. check rf write
     // todo: why exclude store insn? store insn shouldn't write regfile.
-    if(!(se->is_store)){
-      CHECK_EQ_S(wdata,se->rd_new_bits) << fmt::format("\n RTL write Reg({})={:08X} but Spike write={:08X}",waddr,wdata,se->rd_new_bits);
+    if (!(se->is_store)) {
+      CHECK_EQ_S(wdata, se->rd_new_bits) << fmt::format("\n RTL write Reg({})={:08X} but Spike write={:08X}", waddr, wdata, se->rd_new_bits);
     } else {
       LOG(INFO) << fmt::format("Find Store insn");
     }
   } else {
-    LOG(INFO) << fmt::format("RTL csr insn wirte reg({}) = {:08X}, pc = {:08X}",waddr,wdata,pc);
+    LOG(INFO) << fmt::format("RTL csr insn wirte reg({}) = {:08X}, pc = {:08X}", waddr, wdata, pc);
   }
 }
 
@@ -309,16 +308,16 @@ void VBridgeImpl::receive_tl_req() {
   uint8_t opcode = TL(a_bits_opcode);
   uint32_t addr = TL(a_bits_address);
   uint8_t size = TL(a_bits_size);
-  uint8_t src = TL(a_bits_source);   //  TODO: be returned in D channel
+  uint8_t src = TL(a_bits_source);//  TODO: be returned in D channel
   uint8_t param = TL(a_bits_param);
   // find icache refill request, fill fetch_banks
-  if (miss){
-    switch(opcode){
-      case TlOpcode::Get:{
-        for(int i=0; i<8 ; i++){
+  if (miss) {
+    switch (opcode) {
+      case TlOpcode::Get: {
+        for (int i = 0; i < 8; i++) {
           uint64_t insn = 0;
           for (int j = 0; j < 8; ++j) {
-            insn += (uint64_t) load(addr + j + i*8) << (j * 8);
+            insn += (uint64_t) load(addr + j + i * 8) << (j * 8);
           }
           fetch_banks[i].data = insn;
           fetch_banks[i].source = src;
@@ -327,13 +326,13 @@ void VBridgeImpl::receive_tl_req() {
         return;
       }
       // fetch
-      case TlOpcode::AcquireBlock:{
+      case TlOpcode::AcquireBlock: {
         cnt = 1;
         LOG(INFO) << fmt::format("acquire fetch  here ");
-        for(int i=0; i<8 ; i++){
+        for (int i = 0; i < 8; i++) {
           uint64_t data = 0;
           for (int j = 0; j < 8; ++j) {
-            data += (uint64_t) load(addr + j + i*8) << (j * 8);
+            data += (uint64_t) load(addr + j + i * 8) << (j * 8);
           }
           aquire_banks[i].data = data;
           aquire_banks[i].param = param;
@@ -346,19 +345,19 @@ void VBridgeImpl::receive_tl_req() {
   // find corresponding SpikeEvent with addr
   SpikeEvent *se = nullptr;
   for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-    if(addr == se_iter->block.addr){
+    if (addr == se_iter->block.addr) {
       se = &(*se_iter);
-      LOG(INFO) << fmt::format("success find acqure Spike pc = {:08X}",se_iter->pc);
+      LOG(INFO) << fmt::format("success find acqure Spike pc = {:08X}", se_iter->pc);
       break;
     }
   }
-  // list the queue if FATAL
-  if(se == nullptr){
-        for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
-          LOG(INFO) << fmt::format("List: spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}",se_iter->pc,se_iter->rd_idx,se_iter->rd_old_bits, se_iter->rd_new_bits,se_iter->is_committed);
-          LOG(INFO) << fmt::format("List:spike block.addr = {:08X}",se_iter->block.addr);
-        }
-    LOG(FATAL) << fmt::format("cannot find spike_event for tl_request; addr = {:08X}, pc = {:08X} , opcode = {}",addr,pc,opcode);
+  // list the queue if error
+  if (se == nullptr) {
+    for (auto se_iter = to_rtl_queue.rbegin(); se_iter != to_rtl_queue.rend(); se_iter++) {
+      LOG(INFO) << fmt::format("List: spike pc = {:08X}, write reg({}) from {:08x} to {:08X}, is commit:{}", se_iter->pc, se_iter->rd_idx, se_iter->rd_old_bits, se_iter->rd_new_bits, se_iter->is_committed);
+      LOG(INFO) << fmt::format("List:spike block.addr = {:08X}", se_iter->block.addr);
+    }
+    LOG(FATAL) << fmt::format("cannot find spike_event for tl_request; addr = {:08X}, pc = {:08X} , opcode = {}", addr, pc, opcode);
   }
 
   switch (opcode) {
@@ -366,17 +365,16 @@ void VBridgeImpl::receive_tl_req() {
     case TlOpcode::Get: {
       auto mem_read = se->mem_access_record.all_reads.find(addr);
       CHECK_S(mem_read != se->mem_access_record.all_reads.end())
-              << fmt::format(": [{}] cannot find mem read of addr {:08X}", get_t(), addr);
+          << fmt::format(": [{}] cannot find mem read of addr {:08X}", get_t(), addr);
       CHECK_EQ_S(mem_read->second.size_by_byte, decode_size(size)) << fmt::format(
-            ": [{}] expect mem read of size {}, actual size {} (addr={:08X}, {})",
-            get_t(), mem_read->second.size_by_byte, 1 << decode_size(size), addr, se->describe_insn());
+          ": [{}] expect mem read of size {}, actual size {} (addr={:08X}, {})",
+          get_t(), mem_read->second.size_by_byte, 1 << decode_size(size), addr, se->describe_insn());
 
       uint64_t data = mem_read->second.val;
       LOG(INFO) << fmt::format("[{}] receive rtl mem get req (addr={}, size={}byte), should return data {}",
                                get_t(), addr, decode_size(size), data);
       tl_banks.emplace(std::make_pair(addr, TLReqRecord{
-          data, 1u << size, src, TLReqRecord::opType::Get, get_mem_req_cycles()
-      }));
+                                                data, 1u << size, src, TLReqRecord::opType::Get, get_mem_req_cycles()}));
       mem_read->second.executed = true;
       break;
     }
@@ -388,28 +386,27 @@ void VBridgeImpl::receive_tl_req() {
       auto mem_write = se->mem_access_record.all_writes.find(addr);
 
       CHECK_S(mem_write != se->mem_access_record.all_writes.end())
-              << fmt::format(": [{}] cannot find mem write of addr={:08X}", get_t(), addr);
+          << fmt::format(": [{}] cannot find mem write of addr={:08X}", get_t(), addr);
       CHECK_EQ_S(mem_write->second.size_by_byte, decode_size(size)) << fmt::format(
-            ": [{}] expect mem write of size {}, actual size {} (addr={:08X}, insn='{}')",
-            get_t(), mem_write->second.size_by_byte, 1 << decode_size(size), addr, se->describe_insn());
+          ": [{}] expect mem write of size {}, actual size {} (addr={:08X}, insn='{}')",
+          get_t(), mem_write->second.size_by_byte, 1 << decode_size(size), addr, se->describe_insn());
       CHECK_EQ_S(mem_write->second.val, data) << fmt::format(
-            ": [{}] expect mem write of data {}, actual data {} (addr={:08X}, insn='{}')",
-            get_t(), mem_write->second.size_by_byte, 1 << decode_size(size), addr, se->describe_insn());
+          ": [{}] expect mem write of data {}, actual data {} (addr={:08X}, insn='{}')",
+          get_t(), mem_write->second.size_by_byte, 1 << decode_size(size), addr, se->describe_insn());
 
       tl_banks.emplace(std::make_pair(addr, TLReqRecord{
-          data, 1u << size, src, TLReqRecord::opType::PutFullData, get_mem_req_cycles()
-      }));
+                                                data, 1u << size, src, TLReqRecord::opType::PutFullData, get_mem_req_cycles()}));
       mem_write->second.executed = true;
       break;
     }
 
-    case TlOpcode::AcquireBlock:{
+    case TlOpcode::AcquireBlock: {
       cnt = 1;
-      LOG(INFO) << fmt::format("Find AcquireBlock for mem = {:08X}",addr);
-      for(int i=0; i<8 ; i++){
+      LOG(INFO) << fmt::format("Find AcquireBlock for mem = {:08X}", addr);
+      for (int i = 0; i < 8; i++) {
         uint64_t data = 0;
         for (int j = 0; j < 8; ++j) {
-          data += (uint64_t) load(addr + j + i*8) << (j * 8);
+          data += (uint64_t) load(addr + j + i * 8) << (j * 8);
         }
         aquire_banks[i].data = se->block.blocks[i];
         aquire_banks[i].param = param;
@@ -433,8 +430,8 @@ void VBridgeImpl::return_fetch_response() {
   uint8_t size = 0;
   uint16_t source = 0;
   uint16_t param = 0;
-  for (auto & fetch_bank : fetch_banks){
-    if(fetch_bank.remaining){
+  for (auto &fetch_bank: fetch_banks) {
+    if (fetch_bank.remaining) {
       fetch_bank.remaining = false;
       TL(d_bits_opcode) = 1;
       TL(d_bits_data) = fetch_bank.data;
@@ -445,12 +442,12 @@ void VBridgeImpl::return_fetch_response() {
     }
   }
   // todo: source for acquire?
-  for (auto & aquire_bank : aquire_banks){
-    if(cnt){
+  for (auto &aquire_bank: aquire_banks) {
+    if (cnt) {
       cnt = 0;
       break;
     }
-    if(aquire_bank.remaining){
+    if (aquire_bank.remaining) {
       aquire_bank.remaining = false;
       TL(d_bits_opcode) = 5;
       TL(d_bits_data) = aquire_bank.data;
@@ -458,19 +455,11 @@ void VBridgeImpl::return_fetch_response() {
       TL(d_bits_param) = 0;
       size = 6;
       aqu_valid = true;
-      goto output;
     }
   }
-  output:
+output:
   TL(d_bits_source) = source;
   TL(d_bits_size) = size;
   TL(d_valid) = fetch_valid | aqu_valid;
 #undef TL
 }
-
-
-
-
-
-
-

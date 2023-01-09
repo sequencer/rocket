@@ -256,7 +256,6 @@ object cosim extends Module {
         "--output-split 20000",
         "--output-split-cfuncs 20000",
         "--max-num-width 1048576",
-        "--vpi"
         // format: on
       )
     }

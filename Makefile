@@ -32,5 +32,7 @@ riscvtests:
 smoketest:
 	mill -i -j 0 tests.smoketest.smoketest
 
+clion:
+	nix develop -c clion out/cosim/emulator/elf.dest
 clean:
 	git clean -fd

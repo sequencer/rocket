@@ -1,7 +1,7 @@
 #pragma once
 
-#include <queue>
 #include <optional>
+#include <queue>
 
 #include "mmu.h"
 
@@ -9,37 +9,38 @@
 #include "VV___024root.h"
 #include "verilated_fst_c.h"
 
-#include "spike_event.h"
 #include "simple_sim.h"
+#include "spike_event.h"
 #include "vbridge_config.h"
 
 
 class SpikeEvent;
 
 struct TLReqRecord {
-    uint64_t data;
-    uint32_t size_by_byte;
-    uint16_t source;
+  uint64_t data;
+  uint32_t size_by_byte;
+  uint16_t source;
 
-    /// when opType set to nil, it means this record is already sent back
-    enum class opType {
-        Nil, Get, PutFullData
-    } op;
-    int remaining_cycles;
+  /// when opType set to nil, it means this record is already sent back
+  enum class opType {
+    Nil,
+    Get,
+    PutFullData
+  } op;
+  int remaining_cycles;
 
-    TLReqRecord(uint64_t data, uint32_t size_by_byte, uint16_t source, opType op, int cycles) :
-        data(data), size_by_byte(size_by_byte), source(source), op(op), remaining_cycles(cycles) {};
+  TLReqRecord(uint64_t data, uint32_t size_by_byte, uint16_t source, opType op, int cycles) : data(data), size_by_byte(size_by_byte), source(source), op(op), remaining_cycles(cycles){};
 };
-struct FetchRecord{
-    uint64_t data;
-    uint16_t source;
-    bool remaining;
+struct FetchRecord {
+  uint64_t data;
+  uint16_t source;
+  bool remaining;
 };
-struct AquireRecord{
-    uint64_t data;
-    uint16_t param;
-    uint16_t source;
-    bool remaining;
+struct AquireRecord {
+  uint64_t data;
+  uint16_t param;
+  uint16_t source;
+  bool remaining;
 };
 
 
@@ -49,7 +50,7 @@ public:
 
   ~VBridgeImpl();
 
-  void setup(const std::string &bin, const std::string &ebin,const std::string &wave, uint64_t reset_vector, uint64_t cycles);
+  void setup(const std::string &bin, const std::string &ebin, const std::string &wave, uint64_t reset_vector, uint64_t cycles);
   // todo remove this.
   void configure_simulator(int argc, char **argv);
 

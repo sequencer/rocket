@@ -2,19 +2,19 @@
 
 namespace TlOpcode {
   constexpr int
-  AcquireBlock = 6,
-  Get = 4,
-  AccessAckData = 1,
-  PutFullData = 0,
-  PutPartialData = 1,
-  AccessAck = 4;
+      AcquireBlock = 6,
+      Get = 4,
+      AccessAckData = 1,
+      PutFullData = 0,
+      PutPartialData = 1,
+      AccessAck = 4;
 }
 
 // the following macro helps us to access tl interface by dynamic index
-#define TL_INTERFACE(type, name) \
-[[nodiscard]] inline type &get_tl_##name(VV &top) {      \
-  return top.memory_0_##name; \
-}
+#define TL_INTERFACE(type, name)                      \
+  [[nodiscard]] inline type &get_tl_##name(VV &top) { \
+    return top.memory_0_##name;                       \
+  }
 
 
 TL_INTERFACE(CData, a_ready);

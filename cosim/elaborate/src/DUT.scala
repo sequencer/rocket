@@ -1,4 +1,4 @@
-package rocket.tests
+package cosim.elabotate
 
 import chisel3._
 import freechips.rocketchip.diplomacy.{AddressSet, BundleBridgeSource, InModuleBody, LazyModule, RegionType, SimpleLazyModule, TransferSizes}

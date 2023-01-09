@@ -1,6 +1,5 @@
-package rocket.tests
+package cosim.elabotate
 
-import chisel3.RegNext
 import chisel3.aop.Select
 import chisel3.aop.injecting.InjectingAspect
 import chisel3.stage.ChiselGeneratorAnnotation
@@ -14,7 +13,7 @@ import mainargs._
 import org.chipsalliance.cde.config.{Config, Field}
 import org.chipsalliance.rocket.{DCacheParams, FrontendModule, ICacheModule, ICacheParams, MulDivParams, Rocket, RocketCoreParams}
 import org.chipsalliance.rockettile.RocketTileParams
-import rocket.tests.DUT
+
 
 
 object RocketTileParamsKey extends Field[RocketTileParams]

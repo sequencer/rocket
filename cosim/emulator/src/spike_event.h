@@ -1,24 +1,24 @@
 #pragma once
 
-#include <queue>
 #include <optional>
+#include <queue>
 
-#include "processor.h"
 #include "mmu.h"
+#include "processor.h"
 
 #include "VV.h"
 #include "verilated_fst_c.h"
 
 #include "simple_sim.h"
-#include "vbridge_impl.h"
 #include "vbridge_config.h"
+#include "vbridge_impl.h"
 
 class VBridgeImpl;
 
-struct Cacheblock{
-    uint64_t addr;
-    uint64_t blocks[8];
-    bool remaining;
+struct Cacheblock {
+  uint64_t addr;
+  uint64_t blocks[8];
+  bool remaining;
 };
 
 struct SpikeEvent {
@@ -53,7 +53,6 @@ struct SpikeEvent {
   std::string disasm;
 
 
-
   uint64_t pc;
   uint32_t inst_bits;
   bool is_compress;
@@ -84,12 +83,12 @@ struct SpikeEvent {
     struct single_mem_write {
       uint32_t size_by_byte;
       reg_t val;
-      bool executed = false; // set to true when rtl execute this mem access
+      bool executed = false;// set to true when rtl execute this mem access
     };
     struct single_mem_read {
       uint16_t size_by_byte;
       reg_t val;
-      bool executed = false; // set to true when rtl execute this mem access
+      bool executed = false;// set to true when rtl execute this mem access
     };
     std::map<uint32_t, single_mem_write> all_writes;
     std::map<uint32_t, single_mem_read> all_reads;
