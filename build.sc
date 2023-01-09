@@ -203,24 +203,6 @@ object cosim extends Module {
     def allCSourceFiles = T {
       Lib.findSourceFiles(Seq(csrcDir()), Seq("S", "s", "c", "cpp", "cc")).map(PathRef(_))
     }
-    def verilatorConfig = T {
-      val traceConfigPath = T.dest / "verilator.vlt"
-      os.write(
-        traceConfigPath,
-        "`verilator_config\n" +
-          ujson.read(cosim.elaborate.annos().collectFirst(f => os.read(f.path)).get).arr.flatMap {
-            case anno if anno("class").str == "chisel3.experimental.Trace$TraceAnnotation" =>
-              Some(anno("target").str)
-            case _ => None
-          }.toSet.map { t: String =>
-            val s = t.split('|').last.split("/").last
-            val M = s.split(">").head.split(":").last
-            val S = s.split(">").last
-            s"""//$t\npublic_flat_rd -module "$M" -var "$S""""
-          }.mkString("\n")
-      )
-      PathRef(traceConfigPath)
-    }
     val topName = "V"
     def CMakeListsString = T {
       // format: off
@@ -254,7 +236,6 @@ object cosim extends Module {
          |verilate(${topName}
          |  SOURCES
          |${vsrcs().map(_.path).mkString("\n")}
-         |${verilatorConfig().path.toString}
          |  TRACE_FST
          |  TOP_MODULE DUT
          |  PREFIX V${topName}
