@@ -1,4 +1,4 @@
-package rocket.tests
+package cosim.elabotate
 
 import chisel3._
 import freechips.rocketchip.diplomacy.{AddressSet, BundleBridgeSource, InModuleBody, LazyModule, RegionType, SimpleLazyModule, TransferSizes}
@@ -16,8 +16,9 @@ class DUT(p: Parameters) extends Module {
     val rocketTile = LazyModule(new RocketTile(tileParams, RocketCrossingParams(), PriorityMuxHartIdFromSeq(Seq(tileParams))))
     val masterNode = TLManagerNode(Seq(TLSlavePortParameters.v1(
       Seq(TLSlaveParameters.v1(
-        address = List(AddressSet(0x80000000L, 0x7fffffffL)),
+        address = List(AddressSet(0x0, 0xffffffffL)),
         regionType = RegionType.UNCACHED,
+        executable = true,
         supportsGet = TransferSizes(1, 64),
         supportsAcquireT = TransferSizes(1, 64),
         supportsAcquireB = TransferSizes(1, 64),
@@ -31,7 +32,7 @@ class DUT(p: Parameters) extends Module {
       minLatency = 1
     )))
     masterNode :=* rocketTile.masterNode
-    val memroy = InModuleBody {
+    val memory = InModuleBody {
       masterNode.makeIOs()
     }
 

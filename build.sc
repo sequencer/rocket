@@ -3,7 +3,7 @@ import mill.scalalib._
 import mill.scalalib.publish._
 import mill.scalalib.scalafmt._
 import mill.modules.Util
-import mill.define.Sources
+import mill.define.{Sources, TaskModule}
 import coursier.maven.MavenRepository
 import $file.dependencies.cde.build
 import $file.dependencies.`berkeley-hardfloat`.build
@@ -14,11 +14,12 @@ import $file.dependencies.treadle.build
 import $file.dependencies.chiseltest.build
 import $file.dependencies.tilelink.common
 import $file.common
-
 object v {
   val scala = "2.12.16"
   val chisel3 = ivy"edu.berkeley.cs::chisel3:3.6-SNAPSHOT"
   val chisel3Plugin = ivy"edu.berkeley.cs::chisel3-plugin:3.6-SNAPSHOT"
+  val chiseltest = ivy"edu.berkeley.cs::chiseltest:3.6-SNAPSHOT"
+  val utest = ivy"com.lihaoyi::utest:latest.integration"
   val macroParadise = ivy"org.scalamacros:::paradise:2.1.1"
   val mainargs = ivy"com.lihaoyi::mainargs:0.3.0"
 }
@@ -96,7 +97,6 @@ object myrocketchip extends dependencies.`rocket-chip`.common.CommonRocketChip {
     Seq("-Xsource:2.11", s"-Xplugin:${mychisel3.plugin.jar().path}")
   }
 }
-
 object mytilelink extends dependencies.tilelink.common.TileLinkModule {
   override def millSourcePath = os.pwd / "dependencies" / "tilelink" / "tilelink"
 
@@ -145,7 +145,7 @@ object diplomatic extends common.DiplomaticModule {
   }
 }
 
-object tests extends Module {
+object cosim extends Module {
   object elaborate extends ScalaModule with ScalafmtModule {
     def scalaVersion = T {
       v.scala
@@ -161,133 +161,6 @@ object tests extends Module {
       v.mainargs
     )
 
-    object bootrom extends Module {
-      def cSrcString = T.input {
-        """#define DRAM_BASE 0x80000000
-          |
-          |.section .text.start, "ax", @progbits
-          |.globl _start
-          |_start:
-          |  csrwi 0x7c1, 0 // disable chicken bits
-          |  li s0, DRAM_BASE
-          |  csrr a0, mhartid
-          |  la a1, _dtb
-          |  jr s0
-          |
-          |.section .text.hang, "ax", @progbits
-          |.globl _hang
-          |_hang:
-          |  csrwi 0x7c1, 0 // disable chicken bits
-          |  csrr a0, mhartid
-          |  la a1, _dtb
-          |  csrwi mie, 0
-          |1:
-          |  wfi
-          |  j 1b
-          |
-          |.section .rodata.dtb, "a", @progbits
-          |.globl _dtb
-          |.align 5, 0
-          |_dtb:
-          |.ascii "DTB goes here"
-          |""".stripMargin
-      }
-
-      def cSrcPath = T.persistent {
-        val path = T.dest / "bootrom.S"
-        os.write.over(path, cSrcString())
-        PathRef(path)
-      }
-
-      def linkScriptString = T.input {
-        """SECTIONS
-          |{
-          |  ROM_BASE = 0x10000; /* ... but actually position independent */
-          |  . = ROM_BASE;
-          |  .text.start : { *(.text.start) }
-          |  . = ROM_BASE + 0x40;
-          |  .text.hang : { *(.text.hang) }
-          |  . = ROM_BASE + 0x80;
-          |  .rodata.dtb : { *(.rodata.dtb) }
-          |}
-          |""".stripMargin
-      }
-
-      def linkScriptPath = T.persistent {
-        val path = T.dest / "bootrom.ld"
-        os.write.over(path, linkScriptString())
-        PathRef(path)
-      }
-
-      def elf = T.persistent {
-        val path = T.dest / "bootrom.elf"
-        mill.modules.Jvm.runSubprocess(Seq(
-          "clang",
-          "--target=riscv64", "-march=rv64gc",
-          "-mno-relax",
-          "-static",
-          "-nostdlib",
-          "-Wl,--no-gc-sections",
-          "-fuse-ld=lld", s"-T${linkScriptPath().path}",
-          s"${cSrcPath().path}",
-          "-o", s"$path"),
-          Map[String, String](),
-          T.dest
-        )
-        PathRef(path)
-      }
-
-      def bin = T.persistent {
-        val path = T.dest / "bootrom.bin"
-        mill.modules.Jvm.runSubprocess(Seq(
-          "llvm-objcopy",
-          "-O", "binary",
-          s"${elf().path}",
-          s"$path"),
-          Map[String, String](),
-          T.dest
-        )
-        PathRef(path)
-      }
-
-      def img = T.persistent {
-        val path = T.dest / "bootrom.img"
-        mill.modules.Jvm.runSubprocess(Seq(
-          "dd",
-          s"if=${bin().path}",
-          s"of=$path",
-          "bs=128",
-          "count=1"),
-          Map[String, String](),
-          T.dest
-        )
-        PathRef(path)
-      }
-    }
-
-    def eicgPath = T.persistent {
-      val path = T.dest / "EICG_wrapper.v"
-      os.write.over(path,
-        """/* verilator lint_off UNOPTFLAT */
-          |module EICG_wrapper(
-          |  output out,
-          |  input en,
-          |  input test_en,
-          |  input in
-          |);
-          |  reg en_latched /*verilator clock_enable*/;
-          |  always @(*) begin
-          |     if (!in) begin
-          |        en_latched = en || test_en;
-          |     end
-          |  end
-          |  assign out = en_latched && in;
-          |endmodule
-          |""".stripMargin
-      )
-      PathRef(path)
-    }
-
     def elaborate = T.persistent {
       mill.modules.Jvm.runSubprocess(
         finalMainClass(),
@@ -296,8 +169,6 @@ object tests extends Module {
         forkEnv(),
         Seq(
           "--dir", T.dest.toString,
-          "--bootrom_file", bootrom.img().path.toString,
-          "--eicg_file", eicgPath().path.toString,
         ),
         workingDir = forkWorkingDir()
       )
@@ -319,73 +190,77 @@ object tests extends Module {
       os.walk(elaborate().path).filter(p => p.last.endsWith("anno.json")).map(PathRef(_))
     }
   }
-
+  /** build emulator */
   object emulator extends Module {
 
-    object spike extends Module {
-      override def millSourcePath = os.pwd / "dependencies" / "riscv-isa-sim"
-
-      // ask make to cache file.
-      def compile = T.persistent {
-        mill.modules.Jvm.runSubprocess(
-          Seq(millSourcePath / "configure",
-            "--prefix", "/usr",
-            "--without-boost",
-            "--without-boost-asio",
-            "--without-boost-regex"
-          ).map(_.toString),
-          Map(
-            "CC" -> "clang",
-            "CXX" -> "clang++",
-            "AR" -> "llvm-ar",
-            "RANLIB" -> "llvm-ranlib",
-            "LD" -> "lld"
-          ), T.ctx.dest)
-        mill.modules.Jvm.runSubprocess(Seq("make", "-j", Runtime.getRuntime().availableProcessors()).map(_.toString), Map[String, String](), T.ctx.dest)
-        T.ctx.dest
-      }
-    }
-
+    def csources = T.source { millSourcePath / "src" }
     def csrcDir = T {
       PathRef(millSourcePath / "src")
     }
-
+    def vsrcs = T.persistent {
+      elaborate.rtls().filter(p => p.path.ext == "v" || p.path.ext == "sv")
+    }
     def allCSourceFiles = T {
       Lib.findSourceFiles(Seq(csrcDir()), Seq("S", "s", "c", "cpp", "cc")).map(PathRef(_))
     }
+    val topName = "V"
 
+    def verilatorConfig = T {
+      val traceConfigPath = T.dest / "verilator.vlt"
+      os.write(
+        traceConfigPath,
+        "`verilator_config\n" +
+          ujson.read(cosim.elaborate.annos().collectFirst(f => os.read(f.path)).get).arr.flatMap {
+            case anno if anno("class").str == "chisel3.experimental.Trace$TraceAnnotation" =>
+              Some(anno("target").str)
+            case _ => None
+          }.toSet.map { t: String =>
+            val s = t.split('|').last.split("/").last
+            val M = s.split(">").head.split(":").last
+            val S = s.split(">").last
+            s"""//$t\npublic_flat_rd -module "$M" -var "$S""""
+          }.mkString("\n")
+      )
+      PathRef(traceConfigPath)
+    }
     def CMakeListsString = T {
       // format: off
       s"""cmake_minimum_required(VERSION 3.20)
-         |project(emulator)
-         |include_directories(${csrcDir().path})
-         |# plusarg is here
-         |include_directories(${elaborate.elaborate().path})
-         |link_directories(${spike.compile().toString})
-         |include_directories(${spike.compile().toString})
-         |include_directories(${spike.millSourcePath.toString})
-         |
-         |set(CMAKE_BUILD_TYPE Release)
          |set(CMAKE_CXX_STANDARD 17)
+         |set(CMAKE_CXX_COMPILER_ID "clang")
          |set(CMAKE_C_COMPILER "clang")
          |set(CMAKE_CXX_COMPILER "clang++")
-         |set(CMAKE_CXX_FLAGS "$${CMAKE_CXX_FLAGS} -DVERILATOR -DTEST_HARNESS=VTestHarness")
+         |
+         |project(emulator)
+         |
+         |find_package(args REQUIRED)
+         |find_package(glog REQUIRED)
+         |find_package(fmt REQUIRED)
+         |find_package(libspike REQUIRED)
+         |find_package(verilator REQUIRED)
+         |find_package(Threads REQUIRED)
          |set(THREADS_PREFER_PTHREAD_FLAG ON)
          |
-         |find_package(verilator)
-         |find_package(Threads)
+         |set(CMAKE_CXX_FLAGS "$${CMAKE_CXX_FLAGS} -DVERILATOR")
          |
-         |add_executable(emulator
+         |add_executable(${topName}
          |${allCSourceFiles().map(_.path).mkString("\n")}
          |)
          |
-         |target_link_libraries(emulator PRIVATE $${CMAKE_THREAD_LIBS_INIT})
-         |target_link_libraries(emulator PRIVATE fesvr)
-         |verilate(emulator
+         |target_include_directories(${topName} PUBLIC ${csources().path.toString})
+         |
+         |target_link_libraries(${topName} PUBLIC $${CMAKE_THREAD_LIBS_INIT})
+         |target_link_libraries(${topName} PUBLIC libspike fmt glog)  # note that libargs is header only, nothing to link
+         |
+         |verilate(${topName}
          |  SOURCES
          |${vsrcs().map(_.path).mkString("\n")}
+         |${verilatorConfig().path.toString}
+         |  TRACE_FST
          |  TOP_MODULE DUT
-         |  PREFIX VTestHarness
+         |  PREFIX V${topName}
+         |  OPT_FAST
+         |  THREADS 8
          |  VERILATOR_ARGS ${verilatorArgs().mkString(" ")}
          |)
          |""".stripMargin
@@ -400,29 +275,75 @@ object tests extends Module {
         "+define+RANDOMIZE_GARBAGE_ASSIGN",
         "--output-split 20000",
         "--output-split-cfuncs 20000",
-        "--max-num-width 1048576"
+        "--max-num-width 1048576",
+        "--vpi"
         // format: on
       )
     }
 
-    def vsrcs = T.persistent {
-      elaborate.rtls().filter(p => p.path.ext == "v" || p.path.ext == "sv")
-    }
-
-    def cmakefileLists = T.persistent {
+    def elf = T.persistent {
       val path = T.dest / "CMakeLists.txt"
       os.write.over(path, CMakeListsString())
-      PathRef(T.dest)
-    }
-
-    def elf = T.persistent {
-      mill.modules.Jvm.runSubprocess(Seq("cmake", "-G", "Ninja", "-S", cmakefileLists().path, "-B", T.dest.toString).map(_.toString), Map[String, String](), T.dest)
-      mill.modules.Jvm.runSubprocess(Seq("ninja", "-C", T.dest).map(_.toString), Map[String, String](), T.dest)
-      PathRef(T.dest / "emulator")
+      T.log.info(s"CMake project generated in $path,\nverilating...")
+      os.proc(
+        // format: off
+        "cmake",
+        "-G", "Ninja",
+        T.dest.toString
+        // format: on
+      ).call(T.dest)
+      T.log.info("compile rtl to emulator...")
+      os.proc(
+        // format: off
+        "ninja"
+        // format: on
+      ).call(T.dest)
+      val elf = T.dest / topName
+      T.log.info(s"verilated exe generated: ${elf.toString}")
+      PathRef(elf)
     }
   }
+}
 
-  object cases extends Module {
+/** all the cases: entrance, smoketest and riscv-tests */
+object cases extends Module {
+  trait Case extends Module {
+    def name: T[String] = millSourcePath.last
+    def sources = T.sources { millSourcePath }
+    def allSourceFiles = T { Lib.findSourceFiles(sources(), Seq("S", "s", "c", "cpp")).map(PathRef(_)) }
+    def linkScript: T[PathRef] = T {
+      os.write(T.ctx.dest / "linker.ld", s"""
+                                            |SECTIONS
+                                            |{
+                                            |  . = 0x1000;
+                                            |  .text.start : { *(.text.start) }
+                                            |}
+                                            |""".stripMargin)
+      PathRef(T.ctx.dest / "linker.ld")
+    }
+    def compile: T[PathRef] = T {
+      os.proc(Seq("clang-rv64", "-o", name() + ".elf" ,"--target=riscv64", "-march=rv64gc", "-mno-relax", s"-T${linkScript().path}") ++ allSourceFiles().map(_.path.toString)).call(T.ctx.dest)
+      os.proc(Seq("llvm-objcopy", "-O", "binary", "--only-section=.text", name() + ".elf", name())).call(T.ctx.dest)
+      T.log.info(s"${name()} is generated in ${T.dest},\n")
+      PathRef(T.ctx.dest / name())
+    }
+  }
+  object smoketest extends Case{
+    override def linkScript: T[PathRef] = T {
+      os.write(T.ctx.dest / "linker.ld",
+        s"""
+           |SECTIONS
+           |{
+           |  . = 0x80000000;
+           |  .text.start : { *(.text.start) }
+           |}
+           |""".stripMargin)
+      PathRef(T.ctx.dest / "linker.ld")
+    }
+  }
+  object entrance extends Case
+  object riscvtests extends Module {
+
     c =>
     trait Suite extends Module {
       def name: T[String]
@@ -432,7 +353,7 @@ object tests extends Module {
       def binaries: T[Seq[PathRef]]
     }
 
-    object riscvtests extends Module {
+    object test extends Module {
       trait Suite extends c.Suite {
         def name = T {
           millSourcePath.last
@@ -442,8 +363,28 @@ object tests extends Module {
           s"test suite ${name} from riscv-tests"
         }
 
-        def binaries = T {
+        def target = T.persistent {
           os.walk(untar().path).filter(p => p.last.startsWith(name())).filterNot(p => p.last.endsWith("dump")).map(PathRef(_))
+        }
+
+        def init = T.persistent {
+          target().map(bin => {
+            os.proc("cp", bin.path, "./" + bin.path.last + ".elf").call(T.dest)
+            os.proc("llvm-objcopy", "-O", "binary", bin.path.last + ".elf", bin.path.last).call(T.dest)
+          })
+          PathRef(T.dest)
+        }
+
+        def test = T {
+          println("why")
+
+          target.map(a =>
+            println("hello"))
+          PathRef(T.dest)
+        }
+
+        def binaries = T {
+          os.walk(init().path).filter(p => p.last.startsWith(name())).filterNot(p => p.last.endsWith("elf")).map(PathRef(_))
         }
       }
 
@@ -460,8 +401,6 @@ object tests extends Module {
         PathRef(T.dest)
       }
 
-      // These bucket are generated via
-      // os.walk(os.pwd).map(_.last).filterNot(_.endsWith("dump")).map(_.split('-').dropRight(1).mkString("-")).toSet.toSeq.sorted.foreach(println)
       object `rv32mi-p` extends Suite
 
       object `rv32mi-p-lh` extends Suite
@@ -551,21 +490,51 @@ object tests extends Module {
       object `rv64uzfh-p` extends Suite
 
       object `rv64uzfh-v` extends Suite
+
+      object `rv64` extends Suite {
+        override def binaries = T {
+          os.walk(init().path).filter(p => p.last.startsWith(name())).filterNot(p => p.last.endsWith("elf")).filterNot(p => p.last.endsWith("rv64mi-p-csr")).filterNot(p => p.last.endsWith("rv64mi-p-breakpoint")).filterNot(p => p.last.startsWith("rv64um")).map(PathRef(_))
+        }
+      }
     }
   }
+}
 
-  object run extends Module {
-    m =>
-    trait RunableTest extends Module {
-      def elf: T[PathRef]
+object tests extends Module(){
+  object smoketest extends Module {
+    trait Test extends TaskModule {
+      override def defaultCommandName() = "run"
 
-      def testcases: T[Seq[PathRef]]
+      def bin: cases.Case
 
-      def run = T {
-        testcases().map { bin =>
-          val name = bin.path.last
-          val p = os.proc(emulator.elf().path, bin.path).call(stdout = T.dest / s"$name.running.log", mergeErrIntoOut = true)
-          PathRef(if(p.exitCode != 0) {
+      def run(args: String*) = T.command {
+        val proc = os.proc(Seq(cosim.emulator.elf().path.toString(), "--entrance", cases.entrance.compile().path.toString(), "--bin", bin.compile().path.toString, "--wave", (T.dest / "wave").toString) ++ args)
+        T.log.info(s"run test: ${bin.name} with:\n ${proc.command.map(_.value.mkString(" ")).mkString(" ")}")
+        proc.call()
+        PathRef(T.dest)
+      }
+    }
+
+    object smoketest extends Test {
+      def bin = cases.smoketest
+    }
+
+  }
+  object riscvtests extends Module {
+
+    trait Test extends TaskModule {
+      override def defaultCommandName() = "run"
+
+      def bin: T[Seq[PathRef]]
+
+      def run(args: String*) = T.command {
+        bin().map { c =>
+          val name = c.path.last
+          val proc = os.proc(Seq(cosim.emulator.elf().path.toString(), "--entrance", cases.entrance.compile().path.toString(), "--bin", c.path.toString, "--wave", (T.dest / "wave").toString) ++ args)
+          T.log.info(s"run test: ${c.path.last} with:\n ${proc.command.map(_.value.mkString(" ")).mkString(" ")}")
+          val p = proc.call(stdout = T.dest / s"$name.running.log", mergeErrIntoOut = true)
+
+          PathRef(if (p.exitCode != 0) {
             os.move(T.dest / s"$name.running.log", T.dest / s"$name.failed.log")
             System.err.println(s"Test $name failed with exit code ${p.exitCode}")
             T.dest / s"$name.failed.log"
@@ -576,186 +545,84 @@ object tests extends Module {
         }
       }
 
-      def report = T {
-        val failed = run().filter(_.path.last.endsWith("failed.log"))
-        assert(failed.isEmpty, s"tests failed in ${failed.map(_.path.last).mkString(", ")}")
-      }
     }
 
-    object rv64default extends Module {
-      trait RunableTest extends m.RunableTest {
-        def elf = T {
-          emulator.elf()
-        }
-      }
-
-      def run = T {
-        (`rv64mi-p`.run() ++ 
-        `rv64mi-p-ld`.run() ++ 
-        `rv64mi-p-lh`.run() ++ 
-        `rv64mi-p-lw`.run() ++ 
-        `rv64mi-p-sd`.run() ++ 
-        `rv64mi-p-sh`.run() ++ 
-        `rv64mi-p-sw`.run() ++ 
-        `rv64si-p`.run() ++ 
-        `rv64si-p-icache`.run() ++ 
-        `rv64ua-p`.run() ++ 
-        `rv64ua-v`.run() ++ 
-        `rv64uc-p`.run() ++ 
-        `rv64uc-v`.run() ++ 
-        `rv64ud-p`.run() ++ 
-        `rv64ud-v`.run() ++ 
-        `rv64uf-p`.run() ++ 
-        `rv64uf-v`.run() ++ 
-        // https://github.com/riscv-software-src/riscv-tests/issues/419
-        // `rv64ui-v`.run() ++ 
-        `rv64um-p`.run() ++ 
-        `rv64um-v`.run())
-      }
-      def report = T {
-        val failed = run().filter(_.path.last.endsWith("failed.log"))
-        assert(failed.isEmpty, s"tests failed in ${failed.map(_.path.last).mkString(", ")}")
-      }
-
-      object `rv64mi-p` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64mi-p`.binaries()
-      }
-
-      object `rv64mi-p-ld` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64mi-p-ld`.binaries()
-      }
-
-      object `rv64mi-p-lh` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64mi-p-lh`.binaries()
-      }
-
-      object `rv64mi-p-lw` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64mi-p-lw`.binaries()
-      }
-
-      object `rv64mi-p-sd` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64mi-p-sd`.binaries()
-      }
-
-      object `rv64mi-p-sh` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64mi-p-sh`.binaries()
-      }
-
-      object `rv64mi-p-sw` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64mi-p-sw`.binaries()
-      }
-
-      object `rv64mzicbo-p` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64mzicbo-p`.binaries()
-      }
-
-      object `rv64si-p` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64si-p`.binaries()
-      }
-
-      object `rv64si-p-icache` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64si-p-icache`.binaries()
-      }
-
-      object `rv64ssvnapot-p` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64ssvnapot-p`.binaries()
-      }
-
-      object `rv64ua-p` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64ua-p`.binaries()
-      }
-
-      object `rv64ua-v` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64ua-v`.binaries()
-      }
-
-      object `rv64uc-p` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64uc-p`.binaries()
-      }
-
-      object `rv64uc-v` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64uc-v`.binaries()
-      }
-
-      object `rv64ud-p` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64ud-p`.binaries()
-      }
-
-      object `rv64ud-v` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64ud-v`.binaries()
-      }
-
-      object `rv64uf-p` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64uf-p`.binaries()
-      }
-
-      object `rv64uf-v` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64uf-v`.binaries()
-      }
-
-      object `rv64ui-p` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64ui-p`.binaries()
-      }
-
-      object `rv64ui-v` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64ui-v`.binaries()
-      }
-
-      object `rv64um-p` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64um-p`.binaries()
-      }
-
-      object `rv64um-v` extends RunableTest {
-        def testcases = cases.riscvtests.`rv64um-v`.binaries()
-      }
+    object smoketest extends Test {
+      def bin = Seq(cases.smoketest.compile())
     }
+
+    object `rv64` extends Test {
+      def bin = cases.riscvtests.test.`rv64`.binaries
+    }
+
+    object `rv64si-p` extends Test {
+      def bin = cases.riscvtests.test.`rv64si-p`.binaries
+    }
+
+
+    object `rv64mi-p` extends Test {
+      def bin = cases.riscvtests.test.`rv64mi-p`.binaries
+    }
+
+    object `rv64ua-p` extends Test {
+      def bin = cases.riscvtests.test.`rv64ua-p`.binaries
+    }
+
+    object `rv64ua-v` extends Test {
+      def bin = cases.riscvtests.test.`rv64ua-v`.binaries
+    }
+
+    object `rv64uc-p` extends Test {
+      def bin = cases.riscvtests.test.`rv64uc-p`.binaries
+    }
+
+    object `rv64uc-v` extends Test {
+      def bin = cases.riscvtests.test.`rv64uc-v`.binaries
+    }
+
+    object `rv64ud-p` extends Test {
+      def bin = cases.riscvtests.test.`rv64ud-p`.binaries
+    }
+
+    object `rv64ud-v` extends Test {
+      def bin = cases.riscvtests.test.`rv64ud-v`.binaries
+    }
+
+    object `rv64uf-p` extends Test {
+      def bin = cases.riscvtests.test.`rv64uf-p`.binaries
+    }
+
+    object `rv64uf-v` extends Test {
+      def bin = cases.riscvtests.test.`rv64uf-v`.binaries
+    }
+
+    object `rv64ui-p` extends Test {
+      def bin = cases.riscvtests.test.`rv64ui-p`.binaries
+    }
+
+    object `rv64ui-v` extends Test {
+      def bin = cases.riscvtests.test.`rv64ui-v`.binaries
+    }
+
+    object `rv64uzfh-p` extends Test {
+      def bin = cases.riscvtests.test.`rv64uzfh-p`.binaries
+    }
+
+    object `rv64uzfh-v` extends Test {
+      def bin = cases.riscvtests.test.`rv64uzfh-p`.binaries
+    }
+
+    object `rv64um-p` extends Test {
+      def bin = cases.riscvtests.test.`rv64um-p`.binaries
+    }
+
+    object `rv64um-v` extends Test {
+      def bin = cases.riscvtests.test.`rv64um-v`.binaries
+    }
+
   }
 
 }
 
-object cosim extends Module {
-  object elaborate extends ScalaModule with ScalafmtModule {
-    def scalaVersion = T {
-      v.scala
-    }
 
-    override def moduleDeps = Seq(diplomatic)
 
-    override def scalacOptions = T {
-      Seq("-Xsource:2.11", s"-Xplugin:${mychisel3.plugin.jar().path}")
-    }
-
-    override def ivyDeps = Agg(
-      v.mainargs
-    )
-
-    def elaborate = T.persistent {
-      mill.modules.Jvm.runSubprocess(
-        finalMainClass(),
-        runClasspath().map(_.path),
-        forkArgs(),
-        forkEnv(),
-        Seq(
-          "--dir", T.dest.toString,
-        ),
-        workingDir = forkWorkingDir()
-      )
-      PathRef(T.dest)
-    }
-
-    def rtls = T.persistent {
-      os.read(elaborate().path / "filelist.f").split("\n").map(str =>
-        try {
-          os.Path(str)
-        } catch {
-          case e: IllegalArgumentException if e.getMessage.contains("is not an absolute path") =>
-            elaborate().path / str
-        }
-      ).filter(p => p.ext == "v" || p.ext == "sv").map(PathRef(_)).toSeq
-    }
-
-    def annos = T.persistent {
-      os.walk(elaborate().path).filter(p => p.last.endsWith("anno.json")).map(PathRef(_))
-    }
-  }
-}
