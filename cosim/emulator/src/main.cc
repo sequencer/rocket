@@ -11,10 +11,10 @@ int main(int argc, char **argv) {
   google::InitGoogleLogging(argv[0]);
   google::InstallFailureSignalHandler();
 
-  args::ArgumentParser parser("Vector");
-  args::ValueFlag<std::string> bin(parser, "bin", "test case path.", {"bin"});
-  args::ValueFlag<std::string> entrance(parser, "entrance", "entrance.", {"entrance"});
-  args::ValueFlag<std::string> wave(parser, "wave", "wave output path(in fst).", {"wave"});
+  args::ArgumentParser parser("Rocket");
+  args::ValueFlag<std::string> bin(parser, "bin", "test case path", {"bin"});
+  args::ValueFlag<std::string> entrance(parser, "entrance", "entrance", {"entrance"});
+  args::ValueFlag<std::string> wave(parser, "wave", "wave output path(in fst)", {"wave"});
   args::ValueFlag<uint64_t> reset_vector(parser, "reset_vector", "set reset vector", {"reset-vector"}, 0x80000000);
   args::ValueFlag<uint64_t> cycles(parser, "cycles", "set simulation cycles", {"cycles"}, 1000);
   parser.ParseCLI(argc, argv);
